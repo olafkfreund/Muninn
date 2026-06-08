@@ -1,4 +1,8 @@
-# Muninn 🐦
+<p align="center">
+  <img src="assets/images/logo.png" alt="Muninn Logo" width="320">
+</p>
+
+# Muninn
 
 Muninn is a modern, responsive GitHub management portal designed to connect to your GitHub account and help you monitor, manage, and automate your repositories, actions, issues, pull requests, security alerts, and stars. 
 
