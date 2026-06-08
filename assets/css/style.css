@@ -156,6 +156,13 @@ code, pre, .mono-text {
   color: var(--yellow);
 }
 
+.logo img {
+  height: 36px;
+  width: auto;
+  border-radius: 6px;
+  border: 2px solid var(--border-color);
+}
+
 .nav-links {
   list-style: none;
   display: flex;
