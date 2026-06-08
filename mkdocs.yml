@@ -1,0 +1,27 @@
+site_name: Muninn Portal Docs
+site_description: Technical documentation for Muninn GitHub Management Portal
+site_author: Olaf Krasicki-Freund
+
+nav:
+  - Overview: index.md
+  - Architecture: architecture.md
+  - Local Development: development.md
+  - Fallback MCP Bridge: bridge.md
+  - Backstage Integration: backstage.md
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep orange
+      accent: amber
+    - scheme: default
+      primary: orange
+      accent: amber
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - techdocs-core

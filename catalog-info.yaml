@@ -1,0 +1,20 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: muninn
+  description: A modern, Gruvbox-themed GitHub management portal with native WebMCP capabilities.
+  title: Muninn Portal
+  annotations:
+    # TechDocs documentation reference (points to local docs/ directory)
+    backstage.io/techdocs-ref: dir:.
+    
+    # GitHub Integration
+    github.com/project-slug: olafkfreund/Muninn
+    
+    # GitHub Actions Integration (shows actions runs directly in Backstage)
+    github.com/actions-workflow: pages-deploy.yml
+spec:
+  type: website
+  lifecycle: production
+  owner: guests
+  system: developer-tools
