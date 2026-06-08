@@ -11,3 +11,13 @@ node_modules/
 .env.local
 .env.*
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Agent session
+.agent_session
+last_session.txt
