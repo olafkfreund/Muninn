@@ -1,0 +1,27 @@
+title: Muninn
+description: "A modern GitHub management portal featuring a beautiful Gruvbox theme, built with Jekyll and Vanilla JS."
+baseurl: "/Muninn"
+url: "https://olafkfreund.github.io"
+github_username: olafkfreund
+
+# Build settings
+theme: null
+markdown: kramdown
+permalink: /:title/
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - ".bundle"
+  - ".sass-cache"
+  - ".jekyll-cache"
+  - ".jekyll-metadata"
+  - devenv.nix
+  - devenv.yaml
+  - shell.nix
+  - flake.nix
+  - flake.lock
+  - .envrc
+  - README.md
