@@ -17,7 +17,10 @@
     theme: localStorage.getItem('theme') || 'dark',
     refreshInterval: parseInt(localStorage.getItem('refresh_interval') || '300', 10),
     timerId: null,
-    mcpController: null
+    mcpController: null,
+    bridgeSocket: null,
+    bridgeReconnectTimer: null,
+    bridgeUrl: 'ws://localhost:8765'
   };
 
   // DOM Elements
@@ -957,10 +960,15 @@
     alert(`Attempting connection to local SSE server at: ${url}\n(Note: CORS settings on your local SSE endpoint must allow this browser origin).`);
   };
 
-  // --- WEBMCP AGENT INTEGRATION (BROWSER NATIVE) ---
+  // --- WEBMCP AGENT INTEGRATION (BROWSER NATIVE & FALLBACK BRIDGE) ---
   function checkWebMcpSupport() {
     const isSupported = ('modelContext' in navigator && 'registerTool' in navigator.modelContext);
-    updateWebMcpStatusCard(isSupported, isSupported ? 'Connected & Registered' : 'Inactive (Chromium flag required)');
+    if (isSupported) {
+      updateWebMcpStatusCard(true, 'Active (Native WebMCP)');
+    } else {
+      updateWebMcpStatusCard(false, 'Inactive (Connecting to Bridge...)');
+      connectMcpBridge();
+    }
   }
 
   function updateWebMcpStatusCard(active, text) {
@@ -972,75 +980,24 @@
     el.agentStatusText.textContent = text;
   }
 
-  function registerWebMcpTools() {
-    if (!('modelContext' in navigator && 'registerTool' in navigator.modelContext)) {
-      return;
-    }
-
-    // Abort previous if registered
-    if (state.mcpController) {
-      state.mcpController.abort();
-    }
-
-    state.mcpController = new AbortController();
-    const signal = state.mcpController.signal;
-
-    try {
-      // 1. List loaded repositories tool
-      navigator.modelContext.registerTool({
+  function getToolsList() {
+    return [
+      {
         name: 'list_loaded_repos',
         description: 'Returns the list of repositories loaded in the Muninn dashboard, including star counts and description.',
-        inputSchema: { type: 'object', properties: {} },
-        execute() {
-          return state.repos.map(r => ({
-            name: r.name,
-            full_name: r.full_name,
-            stars: r.stargazers_count,
-            forks: r.forks_count,
-            language: r.language,
-            description: r.description
-          }));
-        },
-        annotations: { readOnlyHint: true }
-      }, { signal });
-
-      // 2. List Pull Requests tool
-      navigator.modelContext.registerTool({
+        inputSchema: { type: 'object', properties: {} }
+      },
+      {
         name: 'list_pull_requests',
         description: 'Returns active GitHub pull requests displayed in Muninn.',
-        inputSchema: { type: 'object', properties: {} },
-        execute() {
-          return state.prs.map(pr => ({
-            number: pr.number,
-            title: pr.title,
-            author: pr.user.login,
-            html_url: pr.html_url,
-            created_at: pr.created_at,
-            draft: pr.draft
-          }));
-        },
-        annotations: { readOnlyHint: true }
-      }, { signal });
-
-      // 3. List Issues tool
-      navigator.modelContext.registerTool({
+        inputSchema: { type: 'object', properties: {} }
+      },
+      {
         name: 'list_issues',
         description: 'Returns open issues grouped by repository.',
-        inputSchema: { type: 'object', properties: {} },
-        execute() {
-          return state.issues.map(issue => ({
-            number: issue.number,
-            title: issue.title,
-            author: issue.user.login,
-            created_at: issue.created_at,
-            labels: issue.labels.map(l => l.name)
-          }));
-        },
-        annotations: { readOnlyHint: true }
-      }, { signal });
-
-      // 4. Trigger Action Workflow tool
-      navigator.modelContext.registerTool({
+        inputSchema: { type: 'object', properties: {} }
+      },
+      {
         name: 'trigger_action_workflow',
         description: 'Triggers a manual workflow dispatch run for a repository.',
         inputSchema: {
@@ -1051,22 +1008,162 @@
             ref: { type: 'string', description: 'Git branch or tag to run on.' }
           },
           required: ['repo', 'workflow_id', 'ref']
-        },
-        async execute(params) {
-          await ghFetch(`/repos/${params.repo}/actions/workflows/${params.workflow_id}/dispatches`, {
-            method: 'POST',
-            body: JSON.stringify({ ref: params.ref })
-          });
-          refreshDashboard();
-          return `Workflow ${params.workflow_id} successfully triggered on branch ${params.ref}!`;
         }
-      }, { signal });
+      }
+    ];
+  }
 
-      updateWebMcpStatusCard(true, 'Connected (6 Tools Active)');
-      console.log('Muninn WebMCP Tools successfully registered!');
+  async function executeTool(name, args) {
+    if (name === 'list_loaded_repos') {
+      return state.repos.map(r => ({
+        name: r.name,
+        full_name: r.full_name,
+        stars: r.stargazers_count,
+        forks: r.forks_count,
+        language: r.language,
+        description: r.description
+      }));
+    }
+    if (name === 'list_pull_requests') {
+      return state.prs.map(pr => ({
+        number: pr.number,
+        title: pr.title,
+        author: pr.user.login,
+        html_url: pr.html_url,
+        created_at: pr.created_at,
+        draft: pr.draft
+      }));
+    }
+    if (name === 'list_issues') {
+      return state.issues.map(issue => ({
+        number: issue.number,
+        title: issue.title,
+        author: issue.user.login,
+        created_at: issue.created_at,
+        labels: issue.labels.map(l => l.name)
+      }));
+    }
+    if (name === 'trigger_action_workflow') {
+      await ghFetch(`/repos/${args.repo}/actions/workflows/${args.workflow_id}/dispatches`, {
+        method: 'POST',
+        body: JSON.stringify({ ref: args.ref })
+      });
+      refreshDashboard();
+      return `Workflow ${args.workflow_id} successfully triggered on branch ${args.ref}!`;
+    }
+    throw new Error('Tool not found: ' + name);
+  }
+
+  function registerWebMcpTools() {
+    if (!('modelContext' in navigator && 'registerTool' in navigator.modelContext)) {
+      return;
+    }
+
+    if (state.mcpController) {
+      state.mcpController.abort();
+    }
+
+    state.mcpController = new AbortController();
+    const signal = state.mcpController.signal;
+
+    try {
+      const tools = getToolsList();
+      tools.forEach(tool => {
+        navigator.modelContext.registerTool({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          execute(args) {
+            return executeTool(tool.name, args);
+          }
+        }, { signal });
+      });
+
+      updateWebMcpStatusCard(true, 'Active (Native WebMCP - ' + tools.length + ' Tools)');
+      console.log('Muninn WebMCP Native Tools successfully registered!');
     } catch (err) {
       console.error('Failed to register WebMCP tools:', err);
       updateWebMcpStatusCard(false, 'Registration Failed');
+    }
+  }
+
+  function connectMcpBridge() {
+    // If bridge is already connected or native WebMCP is running, do nothing
+    if (state.bridgeSocket || ('modelContext' in navigator && 'registerTool' in navigator.modelContext)) {
+      return;
+    }
+
+    console.log('[MCP Bridge] Attempting connection to local bridge at ' + state.bridgeUrl);
+    
+    try {
+      const socket = new WebSocket(state.bridgeUrl);
+      state.bridgeSocket = socket;
+
+      socket.onopen = function () {
+        console.log('[MCP Bridge] Connected to local bridge!');
+        updateWebMcpStatusCard(true, 'Active (via Local Bridge)');
+      };
+
+      socket.onclose = function () {
+        console.log('[MCP Bridge] Connection closed.');
+        state.bridgeSocket = null;
+        
+        const isNativeSupported = ('modelContext' in navigator && 'registerTool' in navigator.modelContext);
+        if (!isNativeSupported) {
+          updateWebMcpStatusCard(false, 'Inactive (Bridge disconnected)');
+        }
+
+        // Try reconnecting in 5 seconds
+        if (state.bridgeReconnectTimer) clearTimeout(state.bridgeReconnectTimer);
+        state.bridgeReconnectTimer = setTimeout(connectMcpBridge, 5000);
+      };
+
+      socket.onerror = function () {
+        socket.close();
+      };
+
+      socket.onmessage = async function (event) {
+        try {
+          const req = JSON.parse(event.data);
+          const { method, id, params } = req;
+
+          if (method === 'tools/list') {
+            const toolsList = getToolsList();
+            socket.send(JSON.stringify({
+              jsonrpc: '2.0',
+              id: id,
+              result: { tools: toolsList }
+            }));
+          } else if (method === 'tools/call') {
+            const toolName = params.name;
+            const args = params.arguments || {};
+            
+            try {
+              const res = await executeTool(toolName, args);
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                id: id,
+                result: {
+                  content: [{
+                    type: 'text',
+                    text: JSON.stringify(res, null, 2)
+                  }]
+                }
+              }));
+            } catch (err) {
+              socket.send(JSON.stringify({
+                jsonrpc: '2.0',
+                id: id,
+                error: { code: -32603, message: err.message }
+              }));
+            }
+          }
+        } catch (err) {
+          console.error('[MCP Bridge] Error processing bridge message:', err);
+        }
+      };
+    } catch (e) {
+      state.bridgeSocket = null;
     }
   }
 
