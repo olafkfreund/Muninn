@@ -8,6 +8,7 @@ nav:
   - Local Development: development.md
   - Fallback MCP Bridge: bridge.md
   - Backstage Integration: backstage.md
+  - Autonomous Agent: agent.md
 
 theme:
   name: material

@@ -21,7 +21,9 @@ Named after one of Odin's ravens, Muninn travels the GitHub API to bring you mem
 *   **Security Scanning Alerts**: Unified view of Dependabot and Code scanning warnings.
 *   **Project Stars Analytics**: Sort, filter, and view star count metrics.
 *   **Routine Automations**: Run daily scripts like PR auto-labeling (marking drafts as WIP) or stale issues cleanup.
+*   **Local Ollama Chat Terminal**: Connect to a local Ollama instance (running `/api/generate`) directly from your dashboard to assist with draft generation and code analysis.
 *   **WebMCP Integration**: Native browser tools registered dynamically to allow compatible AI extensions to query your repositories, pull requests, and issues directly from your open browser tab.
+*   **Autonomous Developer Agent Daemon**: Background Python daemon (powered by the Google Antigravity SDK and GitHub MCP server) that watches code edits in real time, runs syntax/validation tests, and periodically triages repository status.
 
 ---
 
@@ -71,10 +73,19 @@ This allows authorized agents or assistants in your browser tab to query dashboa
 Detailed technical guides are available in the [docs/](docs/) directory:
 
 *   **[Technical Overview](docs/index.md)**: Product goals, features, and target workflows.
+*   **[Autonomous Developer Agent](docs/agent.md)**: Guide to setup, local execution, triggers, and Dockerization of the background agent daemon.
 *   **[Architecture & Security Model](docs/architecture.md)**: Zero-backend design, folder layout, and local token storage details.
 *   **[Local Development Setup](docs/development.md)**: Detailed devenv and Nix shell initialization guide.
 *   **[Fallback MCP Bridge](docs/bridge.md)**: Configuration guide for connecting IDE/CLI agents to the browser tab via `mcp-bridge.js`.
 *   **[Backstage Catalog Integration](docs/backstage.md)**: Details on annotations and TechDocs settings.
+
+### Quick Start: Autonomous Developer Agent
+The background Python agent daemon monitors your files for modifications in real time, runs syntax tests, and polls GitHub for open issues. To run it:
+
+1.  Make sure your `.env` file contains `GEMINI_API_KEY` and your GitHub access token.
+2.  Start the agent using your preferred method:
+    *   **Via Devenv:** `devenv shell agent`
+    *   **Via Docker:** `docker compose build && docker compose run --rm agent`
 
 ### Backstage Software Catalog
 This repository is pre-configured with [catalog-info.yaml](catalog-info.yaml) for direct import into a **Backstage Developer Portal**. It registers the Muninn portal as a system tool and compiles the `docs/` markdown pages into **TechDocs** using the configuration in [mkdocs.yml](mkdocs.yml).

@@ -25,5 +25,6 @@ Muninn consolidates all of these panels into a **single, responsive dashboard**.
 *   **PR Manager**: Triage reviewer assignments, check status validations, and execute direct merges.
 *   **Issue Triage**: Review issues grouped by repository, create new issues via templates, and bulk-close stale issues.
 *   **Security Scans**: Unified display of Dependabot and Code scanning warnings.
-*   **Automations**: Pre-packaged tasks like draft auto-labeling (adding `WIP`) and stale cleanup.
+*   **Automations & Local Ollama Agent**: Local browser terminal allowing direct connection to a local Ollama instance (running `/api/generate`) to assist with draft generation and code analysis.
 *   **WebMCP & Bridge**: Fallback StdIO-to-WebSocket server allowing terminal AI agents to interact with your browser tab.
+*   **Autonomous Developer Agent Daemon**: A background Python service utilizing the Google Antigravity SDK and the GitHub MCP server to monitor code edits in real-time, trigger compiler checks, and periodically check issues. See the [Autonomous Agent Guide](agent.md) for details.
