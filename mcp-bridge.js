@@ -1,17 +1,121 @@
-// Muninn MCP Bridge
-// Bridges stdio (used by IDE/LLM client) to a browser tab WebSocket connection.
+// Muninn MCP Bridge & OAuth Proxy
+// Bridges stdio to WebSocket, and handles secure GitHub OAuth token exchange.
 
+const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
 const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = 8765;
-const wss = new WebSocketServer({ port: PORT });
-let browserSocket = null;
 
-// Track pending JSON-RPC requests from the LLM client
+// --- Load .env File (Zero Dependency Parser) ---
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const parts = trimmed.split('=');
+    const key = parts[0].trim();
+    const val = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
+    process.env[key] = val;
+  });
+  console.error('[Bridge] Loaded local .env file.');
+} else {
+  console.error('[Bridge] Warning: No .env file found. Copy .env.example to .env and fill in credentials.');
+}
+
+const CLIENT_ID = process.env.GITHUB_CLIENT_ID || '';
+const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || '';
+
+// --- HTTP Server for OAuth Proxy & Config ---
+const server = createServer(async (req, res) => {
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
+  // GET /config - Exposes the Client ID to the client-side app
+  if (req.method === 'GET' && req.url === '/config') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ client_id: CLIENT_ID }));
+    return;
+  }
+
+  // POST /oauth/exchange - Securely exchanges the temporary code for an access token
+  if (req.method === 'POST' && req.url === '/oauth/exchange') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { code } = JSON.parse(body);
+        if (!code) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing authorization code' }));
+          return;
+        }
+
+        if (!CLIENT_ID || !CLIENT_SECRET) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'OAuth credentials not configured in bridge .env' }));
+          return;
+        }
+
+        console.error('[Bridge] Exchanging authorization code for token...');
+        const response = await fetch('https://github.com/login/oauth/access_token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            client_id: CLIENT_ID,
+            client_secret: CLIENT_SECRET,
+            code: code
+          })
+        });
+
+        const data = await response.json();
+        if (data.error) {
+          console.error('[Bridge] GitHub OAuth exchange failed:', data.error_description || data.error);
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: data.error_description || data.error }));
+        } else {
+          console.error('[Bridge] OAuth exchange successful!');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ access_token: data.access_token }));
+        }
+      } catch (err) {
+        console.error('[Bridge] Error during OAuth exchange:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Server error during OAuth exchange' }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
+});
+
+// --- WebSocket Server for WebMCP Bridge ---
+const wss = new WebSocketServer({ noServer: true });
+let browserSocket = null;
 const pendingRequests = new Map();
 
-console.error(`[Bridge] Starting WebSocket server on ws://localhost:${PORT}...`);
+// Integrate WS upgrade with our HTTP server
+server.on('upgrade', (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
 
 wss.on('connection', (ws) => {
   console.error('[Bridge] Browser tab connected!');
@@ -20,23 +124,17 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message.toString());
-      
-      // Check if this is a response to a forwarded request
       if (data.id !== undefined && pendingRequests.has(data.id)) {
         const originalId = data.id;
         const response = pendingRequests.get(originalId);
         pendingRequests.delete(originalId);
 
-        // Send response back to LLM client stdout
         sendToStdout({
           jsonrpc: '2.0',
           id: originalId,
           result: data.result,
           error: data.error
         });
-      } else {
-        // Forward notifications or other messages if applicable
-        console.error('[Bridge] Received message from browser:', data);
       }
     } catch (err) {
       console.error('[Bridge] Error parsing browser message:', err.message);
@@ -51,7 +149,12 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Setup Readline to parse standard input from LLM client
+// Start listening
+server.listen(PORT, () => {
+  console.error(`[Bridge] Unified Server listening on http://localhost:${PORT}`);
+});
+
+// --- stdio MCP Interface ---
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -75,16 +178,13 @@ rl.on('line', (line) => {
 function handleClientRequest(req) {
   const { method, id, params } = req;
 
-  // 1. Handle standard initialization handshake directly
   if (method === 'initialize') {
     sendToStdout({
       jsonrpc: '2.0',
       id: id,
       result: {
         protocolVersion: '2024-11-05',
-        capabilities: {
-          tools: {}
-        },
+        capabilities: { tools: {} },
         serverInfo: {
           name: 'muninn-mcp-bridge',
           version: '1.0.0'
@@ -95,27 +195,22 @@ function handleClientRequest(req) {
   }
 
   if (method === 'notifications/initialized') {
-    // Handshake finished, no response needed
     return;
   }
 
-  // 2. Forward other requests to the browser if connected
   if (!browserSocket) {
     sendToStdout({
       jsonrpc: '2.0',
       id: id,
       error: { 
         code: -32603, 
-        message: 'No browser tab connected to the bridge. Please open Muninn portal in your browser.' 
+        message: 'No browser tab connected. Please open Muninn portal in your browser.' 
       }
     });
     return;
   }
 
-  // Save request context to resolve later
   pendingRequests.set(id, req);
-
-  // Send request to browser
   browserSocket.send(JSON.stringify({
     jsonrpc: '2.0',
     method: method,

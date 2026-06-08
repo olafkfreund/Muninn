@@ -93,6 +93,14 @@ title: Muninn - GitHub Dashboard
             <i class="fa-solid fa-plug"></i> Connect Account
           </button>
         </form>
+        
+        <div id="oauth-login-container" style="display: none; margin-top: 24px; border-top: 2px solid var(--border-color); padding-top: 24px;">
+          <p class="mb-4" style="font-size: 13px; color: var(--fg-secondary);">Or login automatically using your local bridge app:</p>
+          <button type="button" class="btn btn-primary" id="btn-oauth-login" style="background-color: var(--green); color: #fbf1c7;">
+            <i class="fa-brands fa-github"></i> Login with GitHub
+          </button>
+        </div>
+        
         <div id="auth-error-msg" class="badge badge-danger mt-4" style="display: none; padding: 10px; width: 100%;"></div>
       </div>
     </section>

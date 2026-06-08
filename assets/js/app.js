@@ -20,7 +20,8 @@
     mcpController: null,
     bridgeSocket: null,
     bridgeReconnectTimer: null,
-    bridgeUrl: 'ws://localhost:8765'
+    bridgeUrl: 'ws://localhost:8765',
+    oauthClientId: ''
   };
 
   // DOM Elements
@@ -41,6 +42,8 @@
     authForm: document.getElementById('auth-form'),
     patInput: document.getElementById('pat-input'),
     authErrorMsg: document.getElementById('auth-error-msg'),
+    oauthLoginContainer: document.getElementById('oauth-login-container'),
+    btnOauthLogin: document.getElementById('btn-oauth-login'),
     
     // Overview
     statRunningWorkflows: document.getElementById('stat-running-workflows'),
@@ -86,19 +89,72 @@
   };
 
   // --- INITIALIZATION ---
-  function init() {
+  async function init() {
     setupTheme();
     setupNavigation();
     setupEventListeners();
     setupAutoRefresh();
 
-    if (state.token) {
+    // Check if redirect contains OAuth code
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      // Clear code query param from address bar
+      window.history.replaceState({}, document.title, window.location.pathname);
+      showView('setup');
+      if (el.authErrorMsg) {
+        el.authErrorMsg.textContent = 'Exchanging authorization code...';
+        el.authErrorMsg.className = 'badge badge-info';
+        el.authErrorMsg.style.display = 'block';
+      }
+      
+      try {
+        const res = await fetch('http://localhost:8765/oauth/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: code })
+        });
+        
+        const data = await res.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        if (data.access_token) {
+          validateAndConnect(data.access_token, true);
+        }
+      } catch (err) {
+        if (el.authErrorMsg) {
+          el.authErrorMsg.textContent = `OAuth connection failed: ${err.message}. Make sure node mcp-bridge.js is running.`;
+          el.authErrorMsg.className = 'badge badge-danger';
+        }
+      }
+    } else if (state.token) {
       validateAndConnect(state.token, false);
     } else {
       showView('setup');
+      checkOauthBridgeAvailability();
     }
 
     checkWebMcpSupport();
+  }
+
+  async function checkOauthBridgeAvailability() {
+    try {
+      const res = await fetch('http://localhost:8765/config');
+      const data = await res.json();
+      if (data.client_id) {
+        state.oauthClientId = data.client_id;
+        if (el.oauthLoginContainer) {
+          el.oauthLoginContainer.style.display = 'block';
+        }
+      }
+    } catch (err) {
+      if (el.oauthLoginContainer) {
+        el.oauthLoginContainer.style.display = 'none';
+      }
+    }
   }
 
   // --- THEME MANAGEMENT ---
@@ -181,6 +237,12 @@
         if (inputToken) {
           validateAndConnect(inputToken, true);
         }
+      });
+    if (el.btnOauthLogin) {
+      el.btnOauthLogin.addEventListener('click', function () {
+        if (!state.oauthClientId) return;
+        const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+        window.location.href = `https://github.com/login/oauth/authorize?client_id=${state.oauthClientId}&scope=repo,workflow,security_events&redirect_uri=${redirectUri}`;
       });
     }
 
@@ -285,6 +347,11 @@
       
       // Validate token by fetching user profile
       const user = await ghFetch('/user');
+      
+      // Access Control: lock access to owner (olafkfreund)
+      if (user.login !== 'olafkfreund') {
+        throw new Error('Access Denied: Only user @olafkfreund is permitted to access this portal.');
+      }
       
       // Save state
       state.user = user;
