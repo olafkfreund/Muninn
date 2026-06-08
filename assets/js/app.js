@@ -238,6 +238,7 @@
           validateAndConnect(inputToken, true);
         }
       });
+    }
     if (el.btnOauthLogin) {
       el.btnOauthLogin.addEventListener('click', function () {
         if (!state.oauthClientId) return;
