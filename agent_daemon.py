@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import asyncio
+import websockets
 from dotenv import load_dotenv
 from google.antigravity import Agent, LocalAgentConfig, types
 from google.antigravity.hooks import policy
@@ -25,7 +26,10 @@ load_dotenv()
 async def check_repo_issues(ctx: TriggerContext):
     logging.info("TRIGGER: Checking GitHub Repository issues periodically...")
     # Send a prompt to the agent, which triggers it to use the GitHub MCP server to list issues
-    await ctx.send("Please search for any open issues in the 'olafkfreund/Muninn' repository that need attention or labels.")
+    try:
+        await ctx.send("Please search for any open issues in the 'olafkfreund/Muninn' repository that need attention or labels.")
+    except (websockets.exceptions.ConnectionClosed, RuntimeError, asyncio.CancelledError) as e:
+        logging.debug(f"Trigger connection closed during exit: {e}")
 
 timer_trigger = every(300, check_repo_issues) # runs every 5 minutes
 
@@ -48,7 +52,10 @@ async def handle_code_changes(ctx: TriggerContext, changes):
     logging.info(f"TRIGGER: Code changes detected: {[c.path for c in relevant_changes]}")
     files_str = ", ".join([os.path.basename(c.path) for c in relevant_changes])
     prompt = f"The following files were modified: {files_str}. Please inspect them, run syntax checks if applicable, and report any errors."
-    await ctx.send(prompt)
+    try:
+        await ctx.send(prompt)
+    except (websockets.exceptions.ConnectionClosed, RuntimeError, asyncio.CancelledError) as e:
+        logging.debug(f"Trigger connection closed during exit: {e}")
 
 watch_dir = os.environ.get("AGENT_WATCH_DIR", os.path.dirname(os.path.abspath(__file__)))
 file_trigger = on_file_change(watch_dir, handle_code_changes)
