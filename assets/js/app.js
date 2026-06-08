@@ -1053,17 +1053,20 @@
       {
         name: 'list_loaded_repos',
         description: 'Returns the list of repositories loaded in the Muninn dashboard, including star counts and description.',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: true }
       },
       {
         name: 'list_pull_requests',
         description: 'Returns active GitHub pull requests displayed in Muninn.',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: true }
       },
       {
         name: 'list_issues',
         description: 'Returns open issues grouped by repository.',
-        inputSchema: { type: 'object', properties: {} }
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: true }
       },
       {
         name: 'trigger_action_workflow',
@@ -1137,14 +1140,20 @@
     try {
       const tools = getToolsList();
       tools.forEach(tool => {
-        navigator.modelContext.registerTool({
+        const toolDef = {
           name: tool.name,
           description: tool.description,
           inputSchema: tool.inputSchema,
-          execute(args) {
-            return executeTool(tool.name, args);
+          async execute(args) {
+            return await executeTool(tool.name, args);
           }
-        }, { signal });
+        };
+        
+        if (tool.annotations) {
+          toolDef.annotations = tool.annotations;
+        }
+
+        navigator.modelContext.registerTool(toolDef, { signal });
       });
 
       updateWebMcpStatusCard(true, 'Active (Native WebMCP - ' + tools.length + ' Tools)');
