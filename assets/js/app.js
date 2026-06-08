@@ -85,7 +85,17 @@
     
     // WebMCP Status
     agentStatusDot: document.getElementById('agent-status-dot'),
-    agentStatusText: document.getElementById('agent-status-text')
+    agentStatusText: document.getElementById('agent-status-text'),
+    
+    // Ollama Agent
+    ollamaUrl: document.getElementById('ollama-url'),
+    btnConnectOllama: document.getElementById('btn-connect-ollama'),
+    ollamaModelSelect: document.getElementById('ollama-model-select'),
+    ollamaTerminalInterface: document.getElementById('ollama-terminal-interface'),
+    ollamaChatHistory: document.getElementById('ollama-chat-history'),
+    ollamaChatInput: document.getElementById('ollama-chat-input'),
+    btnSendOllama: document.getElementById('btn-send-ollama'),
+    ollamaCorsError: document.getElementById('ollama-cors-error')
   };
 
   // --- INITIALIZATION ---
@@ -300,6 +310,88 @@
       el.createIssueForm.addEventListener('submit', function (e) {
         e.preventDefault();
         createGitHubIssue();
+      });
+    }
+    // Ollama connection and chat listeners
+    if (el.btnConnectOllama) {
+      el.btnConnectOllama.addEventListener('click', async function () {
+        const url = el.ollamaUrl.value.trim();
+        if (!url) return;
+        
+        el.btnConnectOllama.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting';
+        el.btnConnectOllama.disabled = true;
+        
+        try {
+          const res = await fetch(`${url}/api/tags`);
+          const data = await res.json();
+          const models = data.models || [];
+          
+          if (models.length === 0) {
+            throw new Error('No models found in your local Ollama. Run: ollama run <model>');
+          }
+          
+          // Populate select
+          el.ollamaModelSelect.innerHTML = models.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+          el.ollamaModelSelect.style.display = 'block';
+          el.ollamaTerminalInterface.style.display = 'block';
+          el.ollamaCorsError.style.display = 'none';
+          
+          el.btnConnectOllama.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--green);"></i> Connected';
+          el.btnConnectOllama.style.backgroundColor = 'var(--bg-soft)';
+        } catch (err) {
+          console.error(err);
+          el.ollamaCorsError.style.display = 'block';
+          el.ollamaTerminalInterface.style.display = 'none';
+          el.ollamaModelSelect.style.display = 'none';
+          el.btnConnectOllama.innerHTML = '<i class="fa-solid fa-plug"></i> Connect';
+          el.btnConnectOllama.disabled = false;
+        }
+      });
+    }
+
+    if (el.btnSendOllama) {
+      const sendMessage = async () => {
+        const promptText = el.ollamaChatInput.value.trim();
+        if (!promptText) return;
+        
+        const url = el.ollamaUrl.value.trim();
+        const model = el.ollamaModelSelect.value;
+        
+        // Append user prompt
+        el.ollamaChatHistory.innerHTML += `<div style="margin-top: 8px; color: var(--fg-primary);"><strong>User:</strong> ${escapeHtml(promptText)}</div>`;
+        el.ollamaChatInput.value = '';
+        el.ollamaChatHistory.scrollTop = el.ollamaChatHistory.scrollHeight;
+        
+        // Append placeholder for response
+        const responseId = 'ollama-response-' + Date.now();
+        el.ollamaChatHistory.innerHTML += `<div style="margin-top: 6px; color: var(--orange);" id="${responseId}"><strong>Ollama:</strong> <i class="fa-solid fa-spinner fa-spin"></i> thinking...</div>`;
+        el.ollamaChatHistory.scrollTop = el.ollamaChatHistory.scrollHeight;
+        
+        const responseEl = document.getElementById(responseId);
+        
+        try {
+          const res = await fetch(`${url}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: model,
+              prompt: promptText,
+              stream: false
+            })
+          });
+          
+          const data = await res.json();
+          responseEl.innerHTML = `<strong>Ollama (${model}):</strong> ${escapeHtml(data.response)}`;
+        } catch (err) {
+          responseEl.innerHTML = `<strong>Ollama:</strong> <span style="color: var(--red);">Error generating response: ${err.message}</span>`;
+        }
+        
+        el.ollamaChatHistory.scrollTop = el.ollamaChatHistory.scrollHeight;
+      };
+      
+      el.btnSendOllama.addEventListener('click', sendMessage);
+      el.ollamaChatInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') sendMessage();
       });
     }
   }
@@ -1278,6 +1370,17 @@
     if (diffHr < 24) return `${diffHr}h ago`;
     if (diffDays === 1) return 'Yesterday';
     return `${diffDays} days ago`;
+  }
+
+  function escapeHtml(text) {
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, function(m) { return map[m]; });
   }
 
   // Kickstart App
