@@ -63,3 +63,19 @@ The registered tools include:
 *   `trigger_action_workflow`
 
 This allows authorized agents or assistants in your browser tab to query dashboard state and perform actions on your behalf without transmitting your Personal Access Token outside the browser context.
+
+---
+
+## Documentation & Backstage Portal Integration
+
+Detailed technical guides are available in the [docs/](docs/) directory:
+
+*   **[Technical Overview](docs/index.md)**: Product goals, features, and target workflows.
+*   **[Architecture & Security Model](docs/architecture.md)**: Zero-backend design, folder layout, and local token storage details.
+*   **[Local Development Setup](docs/development.md)**: Detailed devenv and Nix shell initialization guide.
+*   **[Fallback MCP Bridge](docs/bridge.md)**: Configuration guide for connecting IDE/CLI agents to the browser tab via `mcp-bridge.js`.
+*   **[Backstage Catalog Integration](docs/backstage.md)**: Details on annotations and TechDocs settings.
+
+### Backstage Software Catalog
+This repository is pre-configured with [catalog-info.yaml](catalog-info.yaml) for direct import into a **Backstage Developer Portal**. It registers the Muninn portal as a system tool and compiles the `docs/` markdown pages into **TechDocs** using the configuration in [mkdocs.yml](mkdocs.yml).
+
