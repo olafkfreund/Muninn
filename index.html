@@ -61,6 +61,12 @@ title: Muninn - GitHub Dashboard
       <h2 id="current-view-title">Overview</h2>
       <button class="btn btn-icon btn-sm" id="btn-refresh" title="Refresh dashboard data"><i class="fa-solid fa-rotate"></i></button>
     </div>
+
+    <div class="global-search-wrapper" id="global-search-container" style="display: none; flex-grow: 1; max-width: 400px; margin: 0 24px; position: relative;">
+      <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--fg-secondary); font-size: 13px;"></i>
+      <input type="text" id="global-search-input" class="form-control" placeholder="Search issues, PRs, pipelines..." style="padding-left: 36px; padding-right: 32px; font-size: 13px; height: 36px; padding-top: 0; padding-bottom: 0; line-height: 36px;">
+      <button id="btn-clear-search" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--fg-secondary); cursor: pointer; display: none; font-size: 20px; font-weight: bold; padding: 0; line-height: 1;">&times;</button>
+    </div>
     
     <div class="user-profile" id="user-profile-header" style="display: none;">
       <div class="user-info">
@@ -102,6 +108,103 @@ title: Muninn - GitHub Dashboard
         </div>
         
         <div id="auth-error-msg" class="badge badge-danger mt-4" style="display: none; padding: 10px; width: 100%;"></div>
+      </div>
+    </section>
+
+    <!-- View: Search Results -->
+    <section id="view-search-results" class="view-section">
+      <div class="mb-6">
+        <h3>Search Results</h3>
+        <p class="card-desc">Showing matches for query: <strong id="search-query-display" style="color: var(--orange);">""</strong></p>
+      </div>
+
+      <!-- Repositories Results -->
+      <div class="card mb-6" id="search-section-repos" style="display: none;">
+        <h4 class="mb-4"><i class="fa-solid fa-book-bookmark" style="color: var(--blue);"></i> Repositories</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Repository Name</th>
+                <th>Description</th>
+                <th>Language</th>
+                <th>Stars</th>
+              </tr>
+            </thead>
+            <tbody id="search-repos-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pull Requests Results -->
+      <div class="card mb-6" id="search-section-prs" style="display: none;">
+        <h4 class="mb-4"><i class="fa-solid fa-code-pull-request" style="color: var(--green);"></i> Pull Requests</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>PR</th>
+                <th>Repository</th>
+                <th>Author</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="search-prs-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Issues Results -->
+      <div class="card mb-6" id="search-section-issues" style="display: none;">
+        <h4 class="mb-4"><i class="fa-solid fa-circle-dot" style="color: var(--orange);"></i> Issues</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Issue</th>
+                <th>Repository</th>
+                <th>State</th>
+                <th>Author</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="search-issues-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Workflows/Pipelines Results -->
+      <div class="card mb-6" id="search-section-workflows" style="display: none;">
+        <h4 class="mb-4"><i class="fa-solid fa-circle-play" style="color: var(--yellow);"></i> Workflow Runs (Pipelines)</h4>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Workflow</th>
+                <th>Repository</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Triggered By</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody id="search-workflows-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="search-no-results" style="display: none; text-align: center; padding: 48px; border: 2px dashed var(--border-color); border-radius: 8px;">
+        <i class="fa-solid fa-face-frown" style="font-size: 32px; color: var(--fg-secondary); margin-bottom: 12px;"></i>
+        <p style="color: var(--fg-secondary); margin-bottom: 0;">No matches found in issues, pull requests, pipelines, or repositories.</p>
       </div>
     </section>
 

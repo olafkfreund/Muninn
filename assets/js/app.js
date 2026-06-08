@@ -98,6 +98,21 @@
     el.ollamaChatInput = document.getElementById('ollama-chat-input');
     el.btnSendOllama = document.getElementById('btn-send-ollama');
     el.ollamaCorsError = document.getElementById('ollama-cors-error');
+
+    // Global Search
+    el.globalSearchContainer = document.getElementById('global-search-container');
+    el.globalSearchInput = document.getElementById('global-search-input');
+    el.btnClearSearch = document.getElementById('btn-clear-search');
+    el.searchQueryDisplay = document.getElementById('search-query-display');
+    el.searchNoResults = document.getElementById('search-no-results');
+    el.searchSectionRepos = document.getElementById('search-section-repos');
+    el.searchReposTbody = document.getElementById('search-repos-tbody');
+    el.searchSectionPrs = document.getElementById('search-section-prs');
+    el.searchPrsTbody = document.getElementById('search-prs-tbody');
+    el.searchSectionIssues = document.getElementById('search-section-issues');
+    el.searchIssuesTbody = document.getElementById('search-issues-tbody');
+    el.searchSectionWorkflows = document.getElementById('search-section-workflows');
+    el.searchWorkflowsTbody = document.getElementById('search-workflows-tbody');
   }
 
   // --- INITIALIZATION ---
@@ -205,6 +220,12 @@
       viewId = 'setup';
     }
 
+    // Clear search when navigating away
+    if (viewId !== 'search-results' && el.globalSearchInput) {
+      el.globalSearchInput.value = '';
+      if (el.btnClearSearch) el.btnClearSearch.style.display = 'none';
+    }
+
     el.viewSections.forEach(section => {
       section.classList.remove('active');
     });
@@ -223,7 +244,8 @@
         'security': 'Security Alerts',
         'stars': 'Project Stars & Analytics',
         'automation': 'Automations & Agents',
-        'settings': 'Settings'
+        'settings': 'Settings',
+        'search-results': 'Search Results'
       };
       el.currentViewTitle.textContent = titleMap[viewId] || 'Muninn';
 
@@ -397,6 +419,21 @@
         if (e.key === 'Enter') sendMessage();
       });
     }
+
+    // Global Search listeners
+    if (el.globalSearchInput) {
+      el.globalSearchInput.addEventListener('input', function () {
+        const query = this.value.trim();
+        handleGlobalSearch(query);
+      });
+    }
+
+    if (el.btnClearSearch) {
+      el.btnClearSearch.addEventListener('click', function () {
+        el.globalSearchInput.value = '';
+        handleGlobalSearch('');
+      });
+    }
   }
 
   // --- AUTO-REFRESH MANAGEMENT ---
@@ -461,6 +498,10 @@
         el.userAvatarImg.src = user.avatar_url;
       }
 
+      if (el.globalSearchContainer) {
+        el.globalSearchContainer.style.display = 'block';
+      }
+
       if (el.settingsTokenBadge) {
         el.settingsTokenBadge.textContent = 'Connected';
         el.settingsTokenBadge.className = 'badge badge-success';
@@ -507,6 +548,11 @@
     
     if (el.userProfileHeader) {
       el.userProfileHeader.style.display = 'none';
+    }
+
+    if (el.globalSearchContainer) {
+      el.globalSearchContainer.style.display = 'none';
+      el.globalSearchInput.value = '';
     }
 
     if (state.timerId) {
@@ -1373,6 +1419,193 @@
     if (diffHr < 24) return `${diffHr}h ago`;
     if (diffDays === 1) return 'Yesterday';
     return `${diffDays} days ago`;
+  }
+
+  let previousViewBeforeSearch = 'overview';
+
+  function handleGlobalSearch(query) {
+    if (!el.globalSearchInput || !el.btnClearSearch) return;
+
+    if (query.length < 2) {
+      el.btnClearSearch.style.display = 'none';
+      
+      // If we are currently showing search results, switch back to the previous view
+      const activeSection = document.querySelector('.view-section.active');
+      if (activeSection && activeSection.id === 'view-search-results') {
+        showView(previousViewBeforeSearch);
+      }
+      return;
+    }
+
+    el.btnClearSearch.style.display = 'block';
+
+    // Capture the current view if we aren't already on the search results view
+    const activeSection = document.querySelector('.view-section.active');
+    if (activeSection && activeSection.id !== 'view-search-results') {
+      previousViewBeforeSearch = activeSection.id.replace('view-', '');
+    }
+
+    // Switch view to search results
+    el.viewSections.forEach(section => {
+      section.classList.remove('active');
+    });
+    
+    const searchView = document.getElementById('view-search-results');
+    if (searchView) {
+      searchView.classList.add('active');
+    }
+    
+    if (el.currentViewTitle) {
+      el.currentViewTitle.textContent = 'Search Results';
+    }
+    
+    if (el.searchQueryDisplay) {
+      el.searchQueryDisplay.textContent = `"${query}"`;
+    }
+
+    // Perform Search
+    const lowerQuery = query.toLowerCase();
+    let totalMatches = 0;
+
+    // 1. Search Repositories
+    const matchingRepos = state.repos.filter(r => 
+      (r.name && r.name.toLowerCase().includes(lowerQuery)) ||
+      (r.full_name && r.full_name.toLowerCase().includes(lowerQuery)) ||
+      (r.description && r.description.toLowerCase().includes(lowerQuery)) ||
+      (r.language && r.language.toLowerCase().includes(lowerQuery))
+    );
+    
+    if (matchingRepos.length > 0) {
+      el.searchSectionRepos.style.display = 'block';
+      el.searchReposTbody.innerHTML = matchingRepos.map(r => `
+        <tr>
+          <td><a href="${r.html_url}" target="_blank" class="repo-link" style="font-weight: 700;">${escapeHtml(r.name)}</a></td>
+          <td style="font-size: 13px;">${escapeHtml(r.description || 'No description')}</td>
+          <td><span class="badge badge-info">${escapeHtml(r.language || 'Plain Text')}</span></td>
+          <td class="mono-text"><i class="fa-solid fa-star" style="color: var(--yellow);"></i> ${r.stargazers_count}</td>
+        </tr>
+      `).join('');
+      totalMatches += matchingRepos.length;
+    } else {
+      el.searchSectionRepos.style.display = 'none';
+      el.searchReposTbody.innerHTML = '';
+    }
+
+    // 2. Search Pull Requests
+    const matchingPRs = state.prs.filter(pr => 
+      (pr.title && pr.title.toLowerCase().includes(lowerQuery)) ||
+      (pr.number && pr.number.toString().includes(lowerQuery)) ||
+      (pr.body && pr.body.toLowerCase().includes(lowerQuery)) ||
+      (pr.user && pr.user.login.toLowerCase().includes(lowerQuery)) ||
+      (pr.repository_url && pr.repository_url.toLowerCase().includes(lowerQuery))
+    );
+    
+    if (matchingPRs.length > 0) {
+      el.searchSectionPrs.style.display = 'block';
+      el.searchPrsTbody.innerHTML = matchingPRs.map(pr => {
+        const repoName = pr.repository_url.split('/repos/')[1] || '';
+        return `
+          <tr>
+            <td>
+              <a href="${pr.html_url}" target="_blank" style="font-weight: 700;">#${pr.number} ${escapeHtml(pr.title)}</a>
+              ${pr.draft ? '<span class="badge badge-secondary" style="margin-left: 6px;">Draft</span>' : ''}
+            </td>
+            <td class="mono-text">${escapeHtml(repoName)}</td>
+            <td><img src="${pr.user.avatar_url}" style="width: 18px; height: 18px; border-radius: 50%; vertical-align: middle; margin-right: 6px;"> ${escapeHtml(pr.user.login)}</td>
+            <td><span class="badge ${pr.state === 'open' ? 'badge-success' : 'badge-danger'}">${pr.state.toUpperCase()}</span></td>
+            <td style="font-size: 12px; color: var(--fg-secondary);">${new Date(pr.created_at).toLocaleDateString()}</td>
+          </tr>
+        `;
+      }).join('');
+      totalMatches += matchingPRs.length;
+    } else {
+      el.searchSectionPrs.style.display = 'none';
+      el.searchPrsTbody.innerHTML = '';
+    }
+
+    // 3. Search Issues
+    const matchingIssues = state.issues.filter(issue => 
+      (issue.title && issue.title.toLowerCase().includes(lowerQuery)) ||
+      (issue.number && issue.number.toString().includes(lowerQuery)) ||
+      (issue.body && issue.body.toLowerCase().includes(lowerQuery)) ||
+      (issue.user && issue.user.login.toLowerCase().includes(lowerQuery)) ||
+      (issue.repository_url && issue.repository_url.toLowerCase().includes(lowerQuery))
+    );
+    
+    if (matchingIssues.length > 0) {
+      el.searchSectionIssues.style.display = 'block';
+      el.searchIssuesTbody.innerHTML = matchingIssues.map(issue => {
+        const repoName = issue.repository_url.split('/repos/')[1] || '';
+        return `
+          <tr>
+            <td>
+              <a href="${issue.html_url}" target="_blank" style="font-weight: 700;">#${issue.number} ${escapeHtml(issue.title)}</a>
+            </td>
+            <td class="mono-text">${escapeHtml(repoName)}</td>
+            <td><span class="badge ${issue.state === 'open' ? 'badge-warning' : 'badge-success'}">${issue.state.toUpperCase()}</span></td>
+            <td>${escapeHtml(issue.user.login)}</td>
+            <td style="font-size: 12px; color: var(--fg-secondary);">${new Date(issue.created_at).toLocaleDateString()}</td>
+          </tr>
+        `;
+      }).join('');
+      totalMatches += matchingIssues.length;
+    } else {
+      el.searchSectionIssues.style.display = 'none';
+      el.searchIssuesTbody.innerHTML = '';
+    }
+
+    // 4. Search Workflow Runs (Pipelines)
+    let allRuns = [];
+    for (const repo in state.workflowRuns) {
+      if (Array.isArray(state.workflowRuns[repo])) {
+        allRuns = allRuns.concat(state.workflowRuns[repo]);
+      }
+    }
+    
+    const matchingRuns = allRuns.filter(run => 
+      (run.name && run.name.toLowerCase().includes(lowerQuery)) ||
+      (run.head_commit && run.head_commit.message && run.head_commit.message.toLowerCase().includes(lowerQuery)) ||
+      (run.head_branch && run.head_branch.toLowerCase().includes(lowerQuery)) ||
+      (run.repository && run.repository.name && run.repository.name.toLowerCase().includes(lowerQuery)) ||
+      (run.status && run.status.toLowerCase().includes(lowerQuery))
+    );
+    
+    if (matchingRuns.length > 0) {
+      el.searchSectionWorkflows.style.display = 'block';
+      el.searchWorkflowsTbody.innerHTML = matchingRuns.map(run => {
+        let statusBadge = 'badge-secondary';
+        if (run.status === 'completed') {
+          statusBadge = run.conclusion === 'success' ? 'badge-success' : 'badge-danger';
+        } else if (run.status === 'in_progress' || run.status === 'queued') {
+          statusBadge = 'badge-info';
+        }
+        
+        return `
+          <tr>
+            <td>
+              <a href="${run.html_url}" target="_blank" style="font-weight: 700;">${escapeHtml(run.name)}</a>
+              <div style="font-size: 11px; color: var(--fg-secondary); margin-top: 2px;">${escapeHtml(run.head_commit ? run.head_commit.message : '')}</div>
+            </td>
+            <td class="mono-text">${escapeHtml(run.repository ? run.repository.name : '')}</td>
+            <td class="mono-text"><i class="fa-solid fa-code-branch" style="font-size: 11px;"></i> ${escapeHtml(run.head_branch)}</td>
+            <td><span class="badge ${statusBadge}">${(run.conclusion || run.status).toUpperCase()}</span></td>
+            <td>${escapeHtml(run.triggering_actor ? run.triggering_actor.login : 'system')}</td>
+            <td style="font-size: 12px; color: var(--fg-secondary);">${new Date(run.created_at).toLocaleDateString()}</td>
+          </tr>
+        `;
+      }).join('');
+      totalMatches += matchingRuns.length;
+    } else {
+      el.searchSectionWorkflows.style.display = 'none';
+      el.searchWorkflowsTbody.innerHTML = '';
+    }
+
+    // Toggle "No Results" message
+    if (totalMatches === 0) {
+      el.searchNoResults.style.display = 'block';
+    } else {
+      el.searchNoResults.style.display = 'none';
+    }
   }
 
   function escapeHtml(text) {
