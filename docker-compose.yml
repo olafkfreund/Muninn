@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  agent:
+    build: .
+    container_name: muninn_developer_agent
+    volumes:
+      # Mount the codebase so the file triggers and edit capabilities map to local files
+      - .:/workspace
+      # Mount the agent cache so trajectory/session memory persists on host
+      - muninn-agent-cache:/root/.gemini/muninn-agent-cache
+    env_file:
+      - .env
+    environment:
+      # Expose environment variables to the container
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_API_TOKEN=${GITHUB_API_TOKEN}
+      - SYNECHRON_GITHUB_API_TOKEN=${SYNECHRON_GITHUB_API_TOKEN}
+    # Keep stdout/stdin open for interactive console use
+    stdin_open: true
+    tty: true
+
+volumes:
+  muninn-agent-cache:
+    driver: local

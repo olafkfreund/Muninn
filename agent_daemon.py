@@ -50,7 +50,8 @@ async def handle_code_changes(ctx: TriggerContext, changes):
     prompt = f"The following files were modified: {files_str}. Please inspect them, run syntax checks if applicable, and report any errors."
     await ctx.send(prompt)
 
-file_trigger = on_file_change("/home/olafkfreund/Source/GitHub/Muninn", handle_code_changes)
+watch_dir = os.environ.get("AGENT_WATCH_DIR", os.path.dirname(os.path.abspath(__file__)))
+file_trigger = on_file_change(watch_dir, handle_code_changes)
 
 # =============================================================================
 # Main Execution Loop
@@ -82,7 +83,7 @@ async def main():
         logging.info("Configured GitHub MCP server stdio transport.")
 
     # Setup Session Trajectory Persistence
-    save_dir = "/home/olafkfreund/.gemini/muninn-agent-cache"
+    save_dir = os.environ.get("AGENT_CACHE_DIR", os.path.expanduser("~/.gemini/muninn-agent-cache"))
     os.makedirs(save_dir, exist_ok=True)
     session_file = os.path.join(save_dir, "last_session.txt")
     conversation_id = None
