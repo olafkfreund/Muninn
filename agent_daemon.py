@@ -71,6 +71,7 @@ async def main():
     if github_token:
         mcp_servers.append(
             types.McpStdioServer(
+                name="github",
                 command="npx",
                 args=["-y", "@modelcontextprotocol/server-github"],
                 env={
@@ -116,11 +117,12 @@ async def main():
 
     logging.info("Starting Muninn Autonomous Developer Agent...")
     async with Agent(config) as agent:
-        # Save session ID for resumption on next launch
+        # Save session ID for resumption on next launch if available
         try:
-            with open(session_file, "w") as f:
-                f.write(agent.conversation_id)
-            logging.info(f"Saved active session ID: {agent.conversation_id}")
+            if agent.conversation_id:
+                with open(session_file, "w") as f:
+                    f.write(agent.conversation_id)
+                logging.info(f"Saved active session ID: {agent.conversation_id}")
         except Exception as e:
             logging.warning(f"Could not save session ID: {e}")
             
@@ -142,6 +144,15 @@ async def main():
                 
                 logging.info(f"Prompt sent: {prompt}")
                 response = await agent.chat(prompt)
+                
+                # Save session ID if it was generated/changed
+                if agent.conversation_id and not os.path.exists(session_file):
+                    try:
+                        with open(session_file, "w") as f:
+                            f.write(agent.conversation_id)
+                    except Exception:
+                        pass
+                
                 print(f"\nResponse:\n{await response.text()}\n")
             except (KeyboardInterrupt, EOFError):
                 break
