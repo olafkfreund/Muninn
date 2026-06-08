@@ -25,81 +25,84 @@
   };
 
   // DOM Elements
-  const el = {
-    themeToggle: document.getElementById('theme-toggle'),
-    navItems: document.querySelectorAll('.nav-item'),
-    viewSections: document.querySelectorAll('.view-section'),
-    currentViewTitle: document.getElementById('current-view-title'),
-    btnRefresh: document.getElementById('btn-refresh'),
+  const el = {};
+
+  function initializeDOMElements() {
+    el.themeToggle = document.getElementById('theme-toggle');
+    el.navItems = document.querySelectorAll('.nav-item');
+    el.viewSections = document.querySelectorAll('.view-section');
+    el.currentViewTitle = document.getElementById('current-view-title');
+    el.btnRefresh = document.getElementById('btn-refresh');
     
     // Header/Auth
-    userProfileHeader: document.getElementById('user-profile-header'),
-    userDisplayName: document.getElementById('user-display-name'),
-    userLogin: document.getElementById('user-login'),
-    userAvatarImg: document.getElementById('user-avatar-img'),
-    btnLogoutHeader: document.getElementById('btn-logout-header'),
-    viewSetup: document.getElementById('view-setup'),
-    authForm: document.getElementById('auth-form'),
-    patInput: document.getElementById('pat-input'),
-    authErrorMsg: document.getElementById('auth-error-msg'),
-    oauthLoginContainer: document.getElementById('oauth-login-container'),
-    btnOauthLogin: document.getElementById('btn-oauth-login'),
+    el.userProfileHeader = document.getElementById('user-profile-header');
+    el.userDisplayName = document.getElementById('user-display-name');
+    el.userLogin = document.getElementById('user-login');
+    el.userAvatarImg = document.getElementById('user-avatar-img');
+    el.btnLogoutHeader = document.getElementById('btn-logout-header');
+    el.viewSetup = document.getElementById('view-setup');
+    el.authForm = document.getElementById('auth-form');
+    el.patInput = document.getElementById('pat-input');
+    el.authErrorMsg = document.getElementById('auth-error-msg');
+    el.oauthLoginContainer = document.getElementById('oauth-login-container');
+    el.btnOauthLogin = document.getElementById('btn-oauth-login');
     
     // Overview
-    statRunningWorkflows: document.getElementById('stat-running-workflows'),
-    statActivePrs: document.getElementById('stat-active-prs'),
-    statOpenIssues: document.getElementById('stat-open-issues'),
-    statSecurityAlerts: document.getElementById('stat-security-alerts'),
-    statTotalStars: document.getElementById('stat-total-stars'),
-    overviewWorkflowsTbody: document.getElementById('overview-workflows-tbody'),
+    el.statRunningWorkflows = document.getElementById('stat-running-workflows');
+    el.statActivePrs = document.getElementById('stat-active-prs');
+    el.statOpenIssues = document.getElementById('stat-open-issues');
+    el.statSecurityAlerts = document.getElementById('stat-security-alerts');
+    el.statTotalStars = document.getElementById('stat-total-stars');
+    el.overviewWorkflowsTbody = document.getElementById('overview-workflows-tbody');
     
     // Workflows View
-    workflowsRepoSelect: document.getElementById('workflows-repo-select'),
-    workflowsRunsTbody: document.getElementById('workflows-runs-tbody'),
+    el.workflowsRepoSelect = document.getElementById('workflows-repo-select');
+    el.workflowsRunsTbody = document.getElementById('workflows-runs-tbody');
     
     // PR View
-    prsTbody: document.getElementById('prs-tbody'),
+    el.prsTbody = document.getElementById('prs-tbody');
     
     // Issues View
-    issuesListContainer: document.getElementById('issues-list-container'),
-    btnCreateIssueModal: document.getElementById('btn-create-issue-modal'),
-    modalCreateIssue: document.getElementById('modal-create-issue'),
-    btnCloseIssueModal: document.getElementById('btn-close-issue-modal'),
-    btnCancelIssue: document.getElementById('btn-cancel-issue'),
-    createIssueForm: document.getElementById('create-issue-form'),
-    issueRepoSelect: document.getElementById('issue-repo-select'),
-    issueTitleInput: document.getElementById('issue-title-input'),
-    issueBodyTextarea: document.getElementById('issue-body-textarea'),
+    el.issuesListContainer = document.getElementById('issues-list-container');
+    el.btnCreateIssueModal = document.getElementById('btn-create-issue-modal');
+    el.modalCreateIssue = document.getElementById('modal-create-issue');
+    el.btnCloseIssueModal = document.getElementById('btn-close-issue-modal');
+    el.btnCancelIssue = document.getElementById('btn-cancel-issue');
+    el.createIssueForm = document.getElementById('create-issue-form');
+    el.issueRepoSelect = document.getElementById('issue-repo-select');
+    el.issueTitleInput = document.getElementById('issue-title-input');
+    el.issueBodyTextarea = document.getElementById('issue-body-textarea');
     
     // Security View
-    securityAlertsTbody: document.getElementById('security-alerts-tbody'),
+    el.securityAlertsTbody = document.getElementById('security-alerts-tbody');
     
     // Stars View
-    starsTbody: document.getElementById('stars-tbody'),
+    el.starsTbody = document.getElementById('stars-tbody');
     
     // Settings View
-    btnDisconnectToken: document.getElementById('btn-disconnect-token'),
-    settingsTokenBadge: document.getElementById('settings-token-badge'),
-    settingsTokenPreview: document.getElementById('settings-token-preview'),
-    selectRefreshRate: document.getElementById('select-refresh-rate'),
+    el.btnDisconnectToken = document.getElementById('btn-disconnect-token');
+    el.settingsTokenBadge = document.getElementById('settings-token-badge');
+    el.settingsTokenPreview = document.getElementById('settings-token-preview');
+    el.selectRefreshRate = document.getElementById('select-refresh-rate');
     
     // WebMCP Status
-    agentStatusDot: document.getElementById('agent-status-dot'),
-    agentStatusText: document.getElementById('agent-status-text'),
+    el.agentStatusDot = document.getElementById('agent-status-dot');
+    el.agentStatusText = document.getElementById('agent-status-text');
     
     // Ollama Agent
-    ollamaUrl: document.getElementById('ollama-url'),
-    btnConnectOllama: document.getElementById('btn-connect-ollama'),
-    ollamaModelSelect: document.getElementById('ollama-model-select'),
-    ollamaTerminalInterface: document.getElementById('ollama-terminal-interface'),
-    ollamaChatHistory: document.getElementById('ollama-chat-history'),
-    ollamaChatInput: document.getElementById('ollama-chat-input'),
-    btnSendOllama: document.getElementById('btn-send-ollama'),
-    ollamaCorsError: document.getElementById('ollama-cors-error')
-  };
+    el.ollamaUrl = document.getElementById('ollama-url');
+    el.btnConnectOllama = document.getElementById('btn-connect-ollama');
+    el.ollamaModelSelect = document.getElementById('ollama-model-select');
+    el.ollamaTerminalInterface = document.getElementById('ollama-terminal-interface');
+    el.ollamaChatHistory = document.getElementById('ollama-chat-history');
+    el.ollamaChatInput = document.getElementById('ollama-chat-input');
+    el.btnSendOllama = document.getElementById('btn-send-ollama');
+    el.ollamaCorsError = document.getElementById('ollama-cors-error');
+  }
 
   // --- INITIALIZATION ---
   async function init() {
+    initializeDOMElements();
     setupTheme();
     setupNavigation();
     setupEventListeners();
