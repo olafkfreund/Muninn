@@ -10,7 +10,6 @@
   # Ruby configuration
   languages.ruby = {
     enable = true;
-    version = "3.4.9";
     bundler.enable = true;
   };
 
