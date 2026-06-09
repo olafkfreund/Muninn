@@ -21,7 +21,13 @@
     bridgeSocket: null,
     bridgeReconnectTimer: null,
     bridgeUrl: 'ws://localhost:8765',
-    oauthClientId: ''
+    oauthClientId: '',
+    isInitialFetch: true,
+    notifiedIssueIds: new Set(),
+    notifiedPrIds: new Set(),
+    notifiedRunIds: new Set(),
+    notifiedSecurityAlertIds: new Set(),
+    trackedOpenPrs: []
   };
 
   // DOM Elements
@@ -517,6 +523,9 @@
       const activeHash = window.location.hash.replace('#', '') || 'overview';
       showView(activeHash);
       
+      // Request notification permission
+      requestNotificationPermission();
+      
       // Fetch data
       refreshDashboard();
 
@@ -543,6 +552,12 @@
     state.issues = [];
     state.workflowRuns = {};
     state.securityAlerts = [];
+    state.isInitialFetch = true;
+    state.notifiedIssueIds = new Set();
+    state.notifiedPrIds = new Set();
+    state.notifiedRunIds = new Set();
+    state.notifiedSecurityAlertIds = new Set();
+    state.trackedOpenPrs = [];
     
     localStorage.removeItem('gh_pat');
     
@@ -605,6 +620,9 @@
 
       // 5. Load Security Scans
       await loadSecurityScans(repos.slice(0, 5));
+
+      // Check and notify changes
+      await checkAndNotifyChanges();
 
       // Render all views
       renderOverview();
@@ -1383,6 +1401,216 @@
     } catch (e) {
       state.bridgeSocket = null;
     }
+  }
+
+  // --- NOTIFICATION ENGINE ---
+  function requestNotificationPermission() {
+    if (!('Notification' in window)) {
+      console.warn('This browser does not support desktop notifications.');
+      return;
+    }
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          console.log('Desktop notifications enabled.');
+        }
+      });
+    }
+  }
+
+  function showNotification(title, body, type = 'info', url = '') {
+    // 1. In-app popup (toast)
+    const container = document.getElementById('toast-container');
+    if (container) {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      let iconClass = 'fa-circle-info';
+      if (type === 'success') iconClass = 'fa-circle-check';
+      else if (type === 'danger') iconClass = 'fa-circle-xmark';
+      else if (type === 'warning') iconClass = 'fa-triangle-exclamation';
+
+      toast.innerHTML = `
+        <i class="fa-solid ${iconClass} toast-icon"></i>
+        <div class="toast-content" ${url ? `style="cursor: pointer;" onclick="window.open('${url}', '_blank')"` : ''}>
+          <div class="toast-title">${escapeHtml(title || '')}</div>
+          <div class="toast-message">${escapeHtml(body || '')}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.classList.add('toast-fadeOut'); setTimeout(() => this.parentElement.remove(), 300);">&times;</button>
+      `;
+
+      container.appendChild(toast);
+
+      // Auto-remove toast after 6 seconds
+      setTimeout(() => {
+        if (toast.parentElement) {
+          toast.classList.add('toast-fadeOut');
+          setTimeout(() => toast.remove(), 300);
+        }
+      }, 6000);
+    }
+
+    // 2. Desktop notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const origin = window.location.origin;
+      const path = window.location.pathname.replace(/\/index\.html$/, '');
+      const iconUrl = `${origin}${path}/assets/images/logo.png`;
+      const options = {
+        body: body,
+        icon: iconUrl
+      };
+
+      try {
+        const notification = new Notification(title, options);
+        if (url) {
+          notification.onclick = function() {
+            window.open(url, '_blank');
+            window.focus();
+          };
+        }
+      } catch (err) {
+        console.error('Failed to display desktop notification:', err);
+      }
+    }
+  }
+
+  async function checkAndNotifyChanges() {
+    function getRepoFromUrl(url) {
+      if (!url) return '';
+      const parts = url.split(url.includes('api.github.com') ? '/repos/' : 'github.com/');
+      if (parts.length > 1) {
+        return parts[1].split('/').slice(0, 2).join('/');
+      }
+      return '';
+    }
+
+    if (state.isInitialFetch) {
+      state.issues.forEach(issue => {
+        state.notifiedIssueIds.add(issue.id);
+      });
+
+      state.prs.forEach(pr => {
+        state.notifiedPrIds.add(pr.id);
+      });
+      state.trackedOpenPrs = [...state.prs];
+
+      Object.keys(state.workflowRuns).forEach(repo => {
+        const runs = state.workflowRuns[repo] || [];
+        runs.forEach(run => {
+          if (run.status === 'completed') {
+            state.notifiedRunIds.add(run.id);
+          }
+        });
+      });
+
+      state.securityAlerts.forEach(alert => {
+        const alertId = alert.html_url || `${alert.repo}-${alert.id}`;
+        state.notifiedSecurityAlertIds.add(alertId);
+      });
+
+      state.isInitialFetch = false;
+      return;
+    }
+
+    // --- CHECK FOR NEW ISSUES ---
+    state.issues.forEach(issue => {
+      if (!state.notifiedIssueIds.has(issue.id)) {
+        state.notifiedIssueIds.add(issue.id);
+        const repo = getRepoFromUrl(issue.repository_url || issue.html_url);
+        const repoLabel = repo ? ` in ${repo}` : '';
+        showNotification(
+          `New Issue Created`,
+          `#${issue.number}: ${issue.title} by @${issue.user.login}${repoLabel}`,
+          'info',
+          issue.html_url
+        );
+      }
+    });
+
+    // --- CHECK FOR NEW PULL REQUESTS ---
+    state.prs.forEach(pr => {
+      if (!state.notifiedPrIds.has(pr.id)) {
+        state.notifiedPrIds.add(pr.id);
+        const repo = getRepoFromUrl(pr.repository_url || pr.html_url);
+        const repoLabel = repo ? ` in ${repo}` : '';
+        showNotification(
+          `New Pull Request`,
+          `#${pr.number}: ${pr.title} by @${pr.user.login}${repoLabel}`,
+          'info',
+          pr.html_url
+        );
+      }
+    });
+
+    // --- CHECK FOR MERGED PULL REQUESTS ---
+    const newPrIds = new Set(state.prs.map(pr => pr.id));
+    for (const oldPr of state.trackedOpenPrs) {
+      if (!newPrIds.has(oldPr.id)) {
+        const repo = getRepoFromUrl(oldPr.repository_url || oldPr.html_url);
+        if (repo) {
+          try {
+            const prDetails = await ghFetch(`/repos/${repo}/pulls/${oldPr.number}`);
+            if (prDetails && prDetails.merged) {
+              const mergedBy = prDetails.merged_by ? ` by @${prDetails.merged_by.login}` : '';
+              showNotification(
+                `Pull Request Merged`,
+                `#${oldPr.number}: ${oldPr.title}${mergedBy} in ${repo}`,
+                'success',
+                oldPr.html_url
+              );
+            }
+          } catch (err) {
+            console.error(`Error checking merge status for PR #${oldPr.number}:`, err);
+          }
+        }
+      }
+    }
+    state.trackedOpenPrs = [...state.prs];
+
+    // --- CHECK FOR COMPLETED PIPELINES (WORKFLOW RUNS) ---
+    Object.keys(state.workflowRuns).forEach(repo => {
+      const runs = state.workflowRuns[repo] || [];
+      runs.forEach(run => {
+        if (run.status === 'completed' && !state.notifiedRunIds.has(run.id)) {
+          state.notifiedRunIds.add(run.id);
+          const isSuccess = run.conclusion === 'success';
+          const title = isSuccess ? 'Pipeline Succeeded' : 'Pipeline Failed';
+          const type = isSuccess ? 'success' : 'danger';
+          showNotification(
+            title,
+            `${run.name} (#${run.run_number}) for branch ${run.head_branch} in ${repo}`,
+            type,
+            run.html_url
+          );
+        }
+      });
+    });
+
+    // --- CHECK FOR NEW SECURITY SCANS ALERTS ---
+    state.securityAlerts.forEach(alert => {
+      const alertId = alert.html_url || `${alert.repo}-${alert.id}`;
+      if (!state.notifiedSecurityAlertIds.has(alertId)) {
+        state.notifiedSecurityAlertIds.add(alertId);
+        
+        let alertDesc = '';
+        if (alert.security_advisory && alert.security_advisory.summary) {
+          alertDesc = alert.security_advisory.summary;
+        } else if (alert.description) {
+          alertDesc = alert.description;
+        } else if (alert.rule && alert.rule.description) {
+          alertDesc = alert.rule.description;
+        } else {
+          alertDesc = 'Vulnerability found';
+        }
+
+        showNotification(
+          `Security Alert found (${alert.severity.toUpperCase()})`,
+          `${alertDesc} in ${alert.repo}`,
+          'warning',
+          alert.html_url
+        );
+      }
+    });
   }
 
   // --- HELPERS ---
