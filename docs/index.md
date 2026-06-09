@@ -21,6 +21,8 @@ Muninn consolidates all of these panels into a **single, responsive dashboard**.
 
 ## Key Capabilities
 
+*   **Universal Search**: Instant search box allowing users to search across active repositories, pull requests, issues, and pipelines.
+*   **Real-Time Notification Engine**: Dual in-app toasts (styled after the Gruvbox design language) and system desktop notification popups for pull request events, issue creation, pipeline outcomes, and new security vulnerability scans.
 *   **Actions Monitor**: View workflow runs in real-time, cancel stuck pipelines, and trigger new builds.
 *   **PR Manager**: Triage reviewer assignments, check status validations, and execute direct merges.
 *   **Issue Triage**: Review issues grouped by repository, create new issues via templates, and bulk-close stale issues.

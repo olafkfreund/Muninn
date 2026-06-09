@@ -12,9 +12,32 @@ Named after one of Odin's ravens, Muninn travels the GitHub API to bring you mem
 
 ---
 
+## Showcase
+
+<p align="center">
+  <img src="assets/images/screenshot_1.png" alt="Muninn Dashboard Screenshot 1" width="48%">
+  <img src="assets/images/screenshot_2.png" alt="Muninn Dashboard Screenshot 2" width="48%">
+</p>
+<p align="center">
+  <img src="assets/images/screenshot_3.png" alt="Muninn Dashboard Screenshot 3" width="48%">
+  <img src="assets/images/screenshot_4.png" alt="Muninn Dashboard Screenshot 4" width="48%">
+</p>
+<p align="center">
+  <img src="assets/images/screenshot_5.png" alt="Muninn Dashboard Screenshot 5" width="48%">
+  <img src="assets/images/screenshot_6.png" alt="Muninn Dashboard Screenshot 6" width="48%">
+</p>
+<p align="center">
+  <img src="assets/images/screenshot_7.png" alt="Muninn Dashboard Screenshot 7" width="48%">
+  <img src="assets/images/screenshot_8.png" alt="Muninn Dashboard Screenshot 8" width="48%">
+</p>
+
+---
+
 ## Features
 
 *   **Gruvbox Aesthetics**: Dual theme (Light and Dark modes) featuring flat borders, retro shadows, and Outfit + JetBrains Mono typography.
+*   **Universal Global Search**: Instantly find repositories, open pull requests, issues, and workflow runs from a unified, fast client-side query interface.
+*   **Real-Time Notification Engine**: Combined desktop alerts (Web Notifications API) and customized Gruvbox in-app popup toasts for new issues, PR creation, PR merges, completed pipeline/workflow runs, and new security scan alerts. Built-in deduplication filters prevent startup spam.
 *   **Workflow Runner**: Monitor runs (running, success, failed, stopped states) and trigger workflow dispatches or cancel active runs.
 *   **Pull Requests Panel**: Review reviewers, check CI statuses, and merge or close PRs on the fly.
 *   **Issue Tracker**: Group open issues by repository, label triage, and create new issues.
@@ -23,7 +46,7 @@ Named after one of Odin's ravens, Muninn travels the GitHub API to bring you mem
 *   **Routine Automations**: Run daily scripts like PR auto-labeling (marking drafts as WIP) or stale issues cleanup.
 *   **Local Ollama Chat Terminal**: Connect to a local Ollama instance (running `/api/generate`) directly from your dashboard to assist with draft generation and code analysis.
 *   **WebMCP Integration**: Native browser tools registered dynamically to allow compatible AI extensions to query your repositories, pull requests, and issues directly from your open browser tab.
-*   **Autonomous Developer Agent Daemon**: Background Python daemon (powered by the Google Antigravity SDK and GitHub MCP server) that watches code edits in real time, runs syntax/validation tests, and periodically triages repository status.
+*   **Autonomous Developer Agent Daemon**: Background Python daemon (powered by the Google Antigravity SDK and real-time triggers) that watches code edits, runs syntax/validation tests, and periodically triages repository status.
 
 ---
 
