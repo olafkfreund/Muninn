@@ -608,12 +608,12 @@
       // 2. Fetch Open PRs (using Search API for efficiency)
       const prsResult = await ghFetch(`/search/issues?q=is:open+is:pr+user:${state.user.login}&per_page=100`);
       state.prs = prsResult.items || [];
-      el.statActivePrs.textContent = state.prs.length;
+      el.statActivePrs.textContent = prsResult.total_count !== undefined ? prsResult.total_count : state.prs.length;
 
       // 3. Fetch Open Issues (using Search API)
       const issuesResult = await ghFetch(`/search/issues?q=is:open+is:issue+user:${state.user.login}&per_page=100`);
       state.issues = issuesResult.items || [];
-      el.statOpenIssues.textContent = state.issues.length;
+      el.statOpenIssues.textContent = issuesResult.total_count !== undefined ? issuesResult.total_count : state.issues.length;
 
       // 4. Load Recent Workflows runs for overview
       await loadRecentOverviewWorkflows(repos.slice(0, 5));
