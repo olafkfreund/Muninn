@@ -129,6 +129,16 @@
     el.copilotClearBtn = document.getElementById('copilot-clear-btn');
     el.copilotCloseBtn = document.getElementById('copilot-close-btn');
     el.copilotStatusIndicator = document.getElementById('copilot-status-indicator');
+    
+    // New Copilot settings and provider select elements
+    el.copilotProviderSelect = document.getElementById('copilot-provider-select');
+    el.copilotSettingsBtn = document.getElementById('copilot-settings-btn');
+    el.copilotChatSettings = document.getElementById('copilot-chat-settings');
+    el.copilotPatInput = document.getElementById('copilot-pat-input');
+    el.copilotOllamaUrl = document.getElementById('copilot-ollama-url');
+    el.copilotOllamaModel = document.getElementById('copilot-ollama-model');
+    el.copilotSaveSettingsBtn = document.getElementById('copilot-save-settings-btn');
+    el.copilotSettingsStatus = document.getElementById('copilot-settings-status');
   }
 
   // --- INITIALIZATION ---
@@ -467,6 +477,53 @@
     if (el.copilotChatInput) {
       el.copilotChatInput.addEventListener('keypress', function (e) {
         if (e.key === 'Enter') sendCopilotMessage();
+      });
+    }
+    if (el.copilotSettingsBtn) {
+      el.copilotSettingsBtn.addEventListener('click', function() {
+        if (!el.copilotChatSettings) return;
+        const isHidden = el.copilotChatSettings.style.display === 'none';
+        el.copilotChatSettings.style.display = isHidden ? 'block' : 'none';
+      });
+    }
+    if (el.copilotSaveSettingsBtn) {
+      el.copilotSaveSettingsBtn.addEventListener('click', function() {
+        const pat = el.copilotPatInput.value.trim();
+        const ollamaUrl = el.copilotOllamaUrl.value.trim();
+        const ollamaModel = el.copilotOllamaModel.value.trim();
+
+        if (pat) {
+          localStorage.setItem('gh_copilot_pat', pat);
+        } else {
+          localStorage.removeItem('gh_copilot_pat');
+        }
+
+        if (ollamaUrl) {
+          localStorage.setItem('copilot_ollama_url', ollamaUrl);
+        } else {
+          localStorage.removeItem('copilot_ollama_url');
+        }
+
+        if (ollamaModel) {
+          localStorage.setItem('copilot_ollama_model', ollamaModel);
+        } else {
+          localStorage.removeItem('copilot_ollama_model');
+        }
+
+        if (el.copilotSettingsStatus) {
+          el.copilotSettingsStatus.textContent = 'Saved!';
+          setTimeout(() => {
+            el.copilotSettingsStatus.textContent = '';
+          }, 2000);
+        }
+
+        initCopilotConnection();
+      });
+    }
+    if (el.copilotProviderSelect) {
+      el.copilotProviderSelect.addEventListener('change', function() {
+        localStorage.setItem('copilot_provider', this.value);
+        initCopilotConnection();
       });
     }
   }
@@ -1881,19 +1938,51 @@
   async function initCopilotConnection() {
     if (!el.copilotStatusIndicator) return;
     
-    if (!state.token) {
-      updateCopilotStatus('disconnected', 'Disconnected');
-      appendBotMessage('Please connect your GitHub Personal Access Token (PAT) first in the dashboard to use Copilot.');
-      return;
+    // Set provider selection from local storage
+    const provider = localStorage.getItem('copilot_provider') || 'github';
+    if (el.copilotProviderSelect) {
+      el.copilotProviderSelect.value = provider;
     }
-    
-    updateCopilotStatus('connected', 'Connected');
+
+    // Set settings values from local storage
+    if (el.copilotPatInput) {
+      el.copilotPatInput.value = localStorage.getItem('gh_copilot_pat') || '';
+    }
+    if (el.copilotOllamaUrl) {
+      el.copilotOllamaUrl.value = localStorage.getItem('copilot_ollama_url') || 'http://localhost:11434';
+    }
+    if (el.copilotOllamaModel) {
+      el.copilotOllamaModel.value = localStorage.getItem('copilot_ollama_model') || 'llama3';
+    }
+
+    if (provider === 'github') {
+      const copilotToken = localStorage.getItem('gh_copilot_pat') || state.token;
+      if (!copilotToken) {
+        updateCopilotStatus('disconnected', 'Disconnected');
+        return;
+      }
+      updateCopilotStatus('connected', 'Connected');
+    } else if (provider === 'ollama') {
+      const url = localStorage.getItem('copilot_ollama_url') || 'http://localhost:11434';
+      const model = localStorage.getItem('copilot_ollama_model') || 'llama3';
+      try {
+        updateCopilotStatus('loading', 'Checking Ollama...');
+        const res = await fetch(`${url}/api/tags`);
+        if (res.ok) {
+          updateCopilotStatus('connected', `Ollama: ${model}`);
+        } else {
+          throw new Error('Ollama not responding');
+        }
+      } catch (err) {
+        updateCopilotStatus('disconnected', 'Ollama Offline');
+      }
+    }
   }
 
   function updateCopilotStatus(status, text) {
     if (!el.copilotStatusIndicator) return;
     el.copilotStatusIndicator.className = 'copilot-status-indicator ' + status;
-    el.copilotStatusIndicator.title = `GitHub Models: ${text}`;
+    el.copilotStatusIndicator.title = `Status: ${text}`;
   }
 
   function getCopilotSystemMessage() {
@@ -1936,46 +2025,96 @@ Use this information to answer user questions about tasks, pull requests, issues
     const responseId = 'copilot-response-' + Date.now();
     appendPlaceholderMessage(responseId);
     
-    try {
-      updateCopilotStatus('loading', 'Thinking...');
-      const systemMessage = getCopilotSystemMessage();
-      
-      const res = await fetch('https://models.github.ai/inference/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${state.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            { role: 'system', content: systemMessage },
-            { role: 'user', content: promptText }
-          ],
-          temperature: 0.2
-        })
-      });
-      
-      if (!res.ok) {
-        throw new Error('GitHub Models API returned status ' + res.status);
+    const provider = localStorage.getItem('copilot_provider') || 'github';
+    
+    if (provider === 'github') {
+      try {
+        updateCopilotStatus('loading', 'Thinking...');
+        const systemMessage = getCopilotSystemMessage();
+        const copilotToken = localStorage.getItem('gh_copilot_pat') || state.token;
+
+        if (!copilotToken) {
+          throw new Error('No GitHub token found. Please set a Personal Access Token in the dashboard or Copilot settings.');
+        }
+        
+        const res = await fetch('https://models.github.ai/inference/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${copilotToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o',
+            messages: [
+              { role: 'system', content: systemMessage },
+              { role: 'user', content: promptText }
+            ],
+            temperature: 0.2
+          })
+        });
+        
+        if (res.status === 403) {
+          throw new Error('GitHub Models API returned status 403 Forbidden. Your token might not have permissions for GitHub Models. If you logged in via OAuth, please click the gear icon to set a dedicated classic Personal Access Token (PAT) with "repo" and "copilot" scopes.');
+        } else if (!res.ok) {
+          throw new Error('GitHub Models API returned status ' + res.status);
+        }
+        
+        const data = await res.json();
+        const answer = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : 'No response content';
+        
+        const placeholder = document.getElementById(responseId);
+        if (placeholder) {
+          placeholder.innerHTML = parseMarkdown(answer);
+        }
+        
+        updateCopilotStatus('connected', 'Connected');
+      } catch (err) {
+        console.error(err);
+        const placeholder = document.getElementById(responseId);
+        if (placeholder) {
+          placeholder.innerHTML = `<span style="color: var(--red);">${escapeHtml(err.message)}</span>`;
+        }
+        updateCopilotStatus('disconnected', 'Connection Error');
       }
-      
-      const data = await res.json();
-      const answer = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : 'No response content';
-      
-      const placeholder = document.getElementById(responseId);
-      if (placeholder) {
-        placeholder.innerHTML = parseMarkdown(answer);
+    } else if (provider === 'ollama') {
+      try {
+        updateCopilotStatus('loading', 'Ollama thinking...');
+        const url = localStorage.getItem('copilot_ollama_url') || 'http://localhost:11434';
+        const model = localStorage.getItem('copilot_ollama_model') || 'llama3';
+        const systemMessage = getCopilotSystemMessage();
+        
+        const res = await fetch(`${url}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: model,
+            system: systemMessage,
+            prompt: promptText,
+            stream: false
+          })
+        });
+        
+        if (!res.ok) {
+          throw new Error('Ollama returned status ' + res.status);
+        }
+        
+        const data = await res.json();
+        const answer = data.response || 'No response content';
+        
+        const placeholder = document.getElementById(responseId);
+        if (placeholder) {
+          placeholder.innerHTML = parseMarkdown(answer);
+        }
+        
+        updateCopilotStatus('connected', `Ollama: ${model}`);
+      } catch (err) {
+        console.error(err);
+        const placeholder = document.getElementById(responseId);
+        if (placeholder) {
+          placeholder.innerHTML = `<span style="color: var(--red);">Ollama Error: ${escapeHtml(err.message)}</span>`;
+        }
+        updateCopilotStatus('disconnected', 'Ollama Error');
       }
-      
-      updateCopilotStatus('connected', 'Connected');
-    } catch (err) {
-      console.error(err);
-      const placeholder = document.getElementById(responseId);
-      if (placeholder) {
-        placeholder.innerHTML = `<span style="color: var(--red);">Error: ${escapeHtml(err.message)}</span>`;
-      }
-      updateCopilotStatus('disconnected', 'Connection Error');
     }
     
     if (el.copilotChatBody) {

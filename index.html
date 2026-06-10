@@ -571,10 +571,48 @@ title: Muninn - GitHub Dashboard
       <i class="fa-solid fa-robot"></i> Copilot Assistant
     </div>
     <div class="copilot-chat-header-actions">
+      <button class="copilot-chat-header-btn" id="copilot-settings-btn" title="Settings"><i class="fa-solid fa-gear"></i></button>
       <button class="copilot-chat-header-btn" id="copilot-clear-btn" title="Clear chat history"><i class="fa-solid fa-trash-can"></i></button>
       <button class="copilot-chat-header-btn" id="copilot-close-btn" title="Minimize"><i class="fa-solid fa-minus"></i></button>
     </div>
   </div>
+
+  <!-- LLM Provider Select -->
+  <div class="copilot-chat-provider-select" id="copilot-chat-provider-select" style="padding: 8px 12px; background-color: var(--bg-soft); border-bottom: 2px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0;">
+    <span style="font-size: 11px; color: var(--fg-secondary); font-weight: bold;">LLM Provider:</span>
+    <select id="copilot-provider-select" class="form-control" style="font-size: 11px; padding: 2px 6px; height: auto; max-width: 170px; margin: 0; line-height: 1;">
+      <option value="github">GitHub Models (GPT-4o)</option>
+      <option value="ollama">Ollama (Local LLM)</option>
+    </select>
+  </div>
+
+  <!-- Copilot Settings Panel -->
+  <div class="copilot-chat-settings" id="copilot-chat-settings" style="display: none; padding: 12px; background-color: var(--bg-soft); border-bottom: 2px solid var(--border-color); font-size: 12px; flex-shrink: 0; box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.15);">
+    <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--orange);">GitHub Models Settings</div>
+    <div class="form-group mb-3">
+      <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--fg-primary);">Dedicated GitHub PAT (Optional)</label>
+      <input type="password" id="copilot-pat-input" class="form-control" style="padding: 6px; font-size: 11px;" placeholder="ghp_... (Overrides dashboard token)">
+      <p style="font-size: 10px; color: var(--fg-secondary); margin-top: 4px; margin-bottom: 0;">Use this if your main connection returns 403 Forbidden. Leave empty to use dashboard token.</p>
+    </div>
+
+    <div style="font-weight: bold; margin-top: 12px; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--orange);">Local Ollama Settings</div>
+    <div class="form-group mb-2" style="display: flex; gap: 8px;">
+      <div style="flex: 1;">
+        <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--fg-primary);">Ollama URL</label>
+        <input type="text" id="copilot-ollama-url" class="form-control" style="padding: 6px; font-size: 11px;" placeholder="http://localhost:11434">
+      </div>
+      <div style="flex: 1;">
+        <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--fg-primary);">Ollama Model</label>
+        <input type="text" id="copilot-ollama-model" class="form-control" style="padding: 6px; font-size: 11px;" placeholder="llama3 or mistral">
+      </div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+      <span id="copilot-settings-status" style="font-size: 10px; color: var(--green); font-weight: bold;"></span>
+      <button class="btn btn-sm btn-primary" id="copilot-save-settings-btn" style="padding: 4px 10px; font-size: 11px; background-color: var(--blue); color: var(--bg-medium); border: 1px solid var(--border-color); cursor: pointer;">Save Settings</button>
+    </div>
+  </div>
+
   <div class="copilot-chat-body" id="copilot-chat-body">
     <div class="copilot-chat-msg copilot-chat-msg-bot">
       <p>Hello! I am your GitHub Copilot Assistant.</p>
