@@ -1887,43 +1887,13 @@
       return;
     }
     
-    updateCopilotStatus('loading', 'Connecting...');
-    try {
-      await getCopilotToken();
-      updateCopilotStatus('connected', 'Connected');
-    } catch (err) {
-      console.error(err);
-      updateCopilotStatus('disconnected', 'Connection Error');
-      appendBotMessage('Failed to connect to GitHub Copilot. Please ensure your Personal Access Token (PAT) has Copilot access enabled.');
-    }
+    updateCopilotStatus('connected', 'Connected');
   }
 
   function updateCopilotStatus(status, text) {
     if (!el.copilotStatusIndicator) return;
     el.copilotStatusIndicator.className = 'copilot-status-indicator ' + status;
-    el.copilotStatusIndicator.title = `GitHub Copilot: ${text}`;
-  }
-
-  async function getCopilotToken() {
-    if (state.copilotToken && state.copilotTokenExpires > Date.now()) {
-      return state.copilotToken;
-    }
-    
-    const res = await fetch('https://api.github.com/copilot_internal/v2/token', {
-      headers: {
-        'Authorization': `token ${state.token}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
-    
-    if (!res.ok) {
-      throw new Error('Failed to retrieve Copilot token: ' + res.statusText);
-    }
-    
-    const data = await res.json();
-    state.copilotToken = data.token;
-    state.copilotTokenExpires = (data.expires_at ? data.expires_at * 1000 : Date.now() + 25 * 60 * 1000) - 60000;
-    return state.copilotToken;
+    el.copilotStatusIndicator.title = `GitHub Models: ${text}`;
   }
 
   function getCopilotSystemMessage() {
@@ -1939,7 +1909,7 @@
       });
     });
     
-    return `You are GitHub Copilot integrated into Muninn, a developer dashboard.
+    return `You are GitHub Copilot / Models Assistant integrated into Muninn, a developer dashboard.
 You help Olaf manage his GitHub repositories, issues, PRs, and workflow runs.
 Here is the current live state of the dashboard:
 - Owner: @olafkfreund (Olaf Krasicki-Freund)
@@ -1970,13 +1940,11 @@ Use this information to answer user questions about tasks, pull requests, issues
       updateCopilotStatus('loading', 'Thinking...');
       const systemMessage = getCopilotSystemMessage();
       
-      const copilotToken = await getCopilotToken();
-      const res = await fetch('https://api.githubcopilot.com/chat/completions', {
+      const res = await fetch('https://models.github.ai/inference/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${copilotToken}`,
-          'Content-Type': 'application/json',
-          'Copilot-Integration-Id': 'vscode-chat'
+          'Authorization': `Bearer ${state.token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           model: 'gpt-4o',
@@ -1989,7 +1957,7 @@ Use this information to answer user questions about tasks, pull requests, issues
       });
       
       if (!res.ok) {
-        throw new Error('Copilot Chat API returned status ' + res.status);
+        throw new Error('GitHub Models API returned status ' + res.status);
       }
       
       const data = await res.json();
