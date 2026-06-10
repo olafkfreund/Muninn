@@ -119,6 +119,16 @@
     el.searchIssuesTbody = document.getElementById('search-issues-tbody');
     el.searchSectionWorkflows = document.getElementById('search-section-workflows');
     el.searchWorkflowsTbody = document.getElementById('search-workflows-tbody');
+
+    // Copilot Assistant
+    el.copilotChatBtn = document.getElementById('copilot-chat-btn');
+    el.copilotChatPopup = document.getElementById('copilot-chat-popup');
+    el.copilotChatBody = document.getElementById('copilot-chat-body');
+    el.copilotChatInput = document.getElementById('copilot-chat-input');
+    el.copilotSendBtn = document.getElementById('copilot-send-btn');
+    el.copilotClearBtn = document.getElementById('copilot-clear-btn');
+    el.copilotCloseBtn = document.getElementById('copilot-close-btn');
+    el.copilotStatusIndicator = document.getElementById('copilot-status-indicator');
   }
 
   // --- INITIALIZATION ---
@@ -438,6 +448,25 @@
       el.btnClearSearch.addEventListener('click', function () {
         el.globalSearchInput.value = '';
         handleGlobalSearch('');
+      });
+    }
+
+    // Copilot Chat listeners
+    if (el.copilotChatBtn) {
+      el.copilotChatBtn.addEventListener('click', toggleCopilotChat);
+    }
+    if (el.copilotCloseBtn) {
+      el.copilotCloseBtn.addEventListener('click', () => el.copilotChatPopup.classList.remove('active'));
+    }
+    if (el.copilotClearBtn) {
+      el.copilotClearBtn.addEventListener('click', clearCopilotChat);
+    }
+    if (el.copilotSendBtn) {
+      el.copilotSendBtn.addEventListener('click', sendCopilotMessage);
+    }
+    if (el.copilotChatInput) {
+      el.copilotChatInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') sendCopilotMessage();
       });
     }
   }
@@ -1834,6 +1863,206 @@
     } else {
       el.searchNoResults.style.display = 'none';
     }
+  }
+
+  // --- COPILOT CHAT ASSISTANT FLOW ---
+  function toggleCopilotChat() {
+    if (!el.copilotChatPopup) return;
+    
+    const isOpening = !el.copilotChatPopup.classList.contains('active');
+    el.copilotChatPopup.classList.toggle('active', isOpening);
+    
+    if (isOpening) {
+      el.copilotChatInput.focus();
+      initCopilotConnection();
+    }
+  }
+
+  async function initCopilotConnection() {
+    if (!el.copilotStatusIndicator) return;
+    
+    if (!state.token) {
+      updateCopilotStatus('disconnected', 'Disconnected');
+      appendBotMessage('Please connect your GitHub Personal Access Token (PAT) first in the dashboard to use Copilot.');
+      return;
+    }
+    
+    updateCopilotStatus('loading', 'Connecting...');
+    try {
+      await getCopilotToken();
+      updateCopilotStatus('connected', 'Connected');
+    } catch (err) {
+      console.error(err);
+      updateCopilotStatus('disconnected', 'Connection Error');
+      appendBotMessage('Failed to connect to GitHub Copilot. Please ensure your Personal Access Token (PAT) has Copilot access enabled.');
+    }
+  }
+
+  function updateCopilotStatus(status, text) {
+    if (!el.copilotStatusIndicator) return;
+    el.copilotStatusIndicator.className = 'copilot-status-indicator ' + status;
+    el.copilotStatusIndicator.title = `GitHub Copilot: ${text}`;
+  }
+
+  async function getCopilotToken() {
+    if (state.copilotToken && state.copilotTokenExpires > Date.now()) {
+      return state.copilotToken;
+    }
+    
+    const res = await fetch('https://api.github.com/copilot_internal/v2/token', {
+      headers: {
+        'Authorization': `token ${state.token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    
+    if (!res.ok) {
+      throw new Error('Failed to retrieve Copilot token: ' + res.statusText);
+    }
+    
+    const data = await res.json();
+    state.copilotToken = data.token;
+    state.copilotTokenExpires = (data.expires_at ? data.expires_at * 1000 : Date.now() + 25 * 60 * 1000) - 60000;
+    return state.copilotToken;
+  }
+
+  function getCopilotSystemMessage() {
+    const reposSummary = state.repos.slice(0, 10).map(r => `${r.full_name} (${r.stargazers_count} stars)`).join(', ');
+    const prsSummary = state.prs.map(p => `#${p.number}: ${p.title} by @${p.user.login} (${p.draft ? 'Draft' : 'Open'})`).join('\n');
+    const issuesSummary = state.issues.map(i => `#${i.number}: ${i.title} by @${i.user.login}`).join('\n');
+    
+    let runsSummary = [];
+    Object.keys(state.workflowRuns).forEach(repo => {
+      const runs = state.workflowRuns[repo] || [];
+      runs.slice(0, 5).forEach(run => {
+        runsSummary.push(`[${repo}] ${run.name} #${run.run_number} (${run.status}/${run.conclusion || 'running'})`);
+      });
+    });
+    
+    return `You are GitHub Copilot integrated into Muninn, a developer dashboard.
+You help Olaf manage his GitHub repositories, issues, PRs, and workflow runs.
+Here is the current live state of the dashboard:
+- Owner: @olafkfreund (Olaf Krasicki-Freund)
+- Repositories loaded: ${reposSummary}
+- Active Pull Requests (${state.prs.length} total):
+${prsSummary || 'None'}
+- Open Issues (${state.issues.length} total):
+${issuesSummary || 'None'}
+- Recent Workflow Runs/Jobs:
+${runsSummary.slice(0, 10).join('\n') || 'None'}
+
+Use this information to answer user questions about tasks, pull requests, issues, pipeline runs, and general repository status. Keep your responses helpful, concise, and formatted in Markdown.`;
+  }
+
+  async function sendCopilotMessage() {
+    if (!el.copilotChatInput) return;
+    const promptText = el.copilotChatInput.value.trim();
+    if (!promptText) return;
+    
+    el.copilotChatInput.value = '';
+    
+    appendUserMessage(promptText);
+    
+    const responseId = 'copilot-response-' + Date.now();
+    appendPlaceholderMessage(responseId);
+    
+    try {
+      updateCopilotStatus('loading', 'Thinking...');
+      const systemMessage = getCopilotSystemMessage();
+      
+      const copilotToken = await getCopilotToken();
+      const res = await fetch('https://api.githubcopilot.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${copilotToken}`,
+          'Content-Type': 'application/json',
+          'Copilot-Integration-Id': 'vscode-chat'
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: promptText }
+          ],
+          temperature: 0.2
+        })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Copilot Chat API returned status ' + res.status);
+      }
+      
+      const data = await res.json();
+      const answer = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : 'No response content';
+      
+      const placeholder = document.getElementById(responseId);
+      if (placeholder) {
+        placeholder.innerHTML = parseMarkdown(answer);
+      }
+      
+      updateCopilotStatus('connected', 'Connected');
+    } catch (err) {
+      console.error(err);
+      const placeholder = document.getElementById(responseId);
+      if (placeholder) {
+        placeholder.innerHTML = `<span style="color: var(--red);">Error: ${escapeHtml(err.message)}</span>`;
+      }
+      updateCopilotStatus('disconnected', 'Connection Error');
+    }
+    
+    if (el.copilotChatBody) {
+      el.copilotChatBody.scrollTop = el.copilotChatBody.scrollHeight;
+    }
+  }
+
+  function appendUserMessage(text) {
+    if (!el.copilotChatBody) return;
+    const msg = document.createElement('div');
+    msg.className = 'copilot-chat-msg copilot-chat-msg-user';
+    msg.textContent = text;
+    el.copilotChatBody.appendChild(msg);
+    el.copilotChatBody.scrollTop = el.copilotChatBody.scrollHeight;
+  }
+
+  function appendBotMessage(text) {
+    if (!el.copilotChatBody) return;
+    const msg = document.createElement('div');
+    msg.className = 'copilot-chat-msg copilot-chat-msg-bot';
+    msg.innerHTML = parseMarkdown(text);
+    el.copilotChatBody.appendChild(msg);
+    el.copilotChatBody.scrollTop = el.copilotChatBody.scrollHeight;
+  }
+
+  function appendPlaceholderMessage(id) {
+    if (!el.copilotChatBody) return;
+    const msg = document.createElement('div');
+    msg.className = 'copilot-chat-msg copilot-chat-msg-bot';
+    msg.id = id;
+    msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Copilot is thinking...`;
+    el.copilotChatBody.appendChild(msg);
+    el.copilotChatBody.scrollTop = el.copilotChatBody.scrollHeight;
+  }
+
+  function clearCopilotChat() {
+    if (!el.copilotChatBody) return;
+    el.copilotChatBody.innerHTML = `
+      <div class="copilot-chat-msg copilot-chat-msg-bot">
+        <p>Hello! I am your GitHub Copilot Assistant.</p>
+        <p>I have live access to your dashboard. Ask me about your repositories, open pull requests, issues, or failing workflows!</p>
+      </div>
+    `;
+    initCopilotConnection();
+  }
+
+  function parseMarkdown(text) {
+    let html = escapeHtml(text);
+    html = html.replace(/```[a-zA-Z0-9]*\n([\s\S]+?)```/g, '<pre>$1</pre>');
+    html = html.replace(/```([\s\S]+?)```/g, '<pre>$1</pre>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/\*\*([^\*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/^\s*[\*\-]\s+(.+)$/gm, '• $1');
+    html = html.replace(/\n/g, '<br>');
+    return html;
   }
 
   function escapeHtml(text) {

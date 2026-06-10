@@ -558,3 +558,32 @@ title: Muninn - GitHub Dashboard
 <!-- Toast Notifications Container -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- Floating Copilot Chat Assistant Button -->
+<button class="copilot-badge-btn" id="copilot-chat-btn" title="Ask Copilot Assistant">
+  <i class="fa-solid fa-robot"></i>
+</button>
+
+<!-- Copilot Chat Popup -->
+<div class="copilot-chat-popup" id="copilot-chat-popup">
+  <div class="copilot-chat-header">
+    <div class="copilot-chat-header-title">
+      <span class="copilot-status-indicator" id="copilot-status-indicator"></span>
+      <i class="fa-solid fa-robot"></i> Copilot Assistant
+    </div>
+    <div class="copilot-chat-header-actions">
+      <button class="copilot-chat-header-btn" id="copilot-clear-btn" title="Clear chat history"><i class="fa-solid fa-trash-can"></i></button>
+      <button class="copilot-chat-header-btn" id="copilot-close-btn" title="Minimize"><i class="fa-solid fa-minus"></i></button>
+    </div>
+  </div>
+  <div class="copilot-chat-body" id="copilot-chat-body">
+    <div class="copilot-chat-msg copilot-chat-msg-bot">
+      <p>Hello! I am your GitHub Copilot Assistant.</p>
+      <p>I have live access to your dashboard. Ask me about your repositories, open pull requests, issues, or failing workflows!</p>
+    </div>
+  </div>
+  <div class="copilot-chat-input-area">
+    <input type="text" class="copilot-chat-input" id="copilot-chat-input" placeholder="Query Copilot for tasks, jobs, status...">
+    <button class="copilot-chat-send-btn" id="copilot-send-btn" title="Send message"><i class="fa-solid fa-paper-plane"></i></button>
+  </div>
+</div>
+
