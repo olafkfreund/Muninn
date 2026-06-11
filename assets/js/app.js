@@ -20,6 +20,8 @@
     mcpController: null,
     bridgeSocket: null,
     bridgeReconnectTimer: null,
+    projects: [],
+    currentProject: null,
     bridgeUrl: 'ws://localhost:8765',
     oauthClientId: '',
     isInitialFetch: true,
@@ -84,6 +86,16 @@
     
     // Stars View
     el.starsTbody = document.getElementById('stars-tbody');
+
+    // Projects View
+    el.projectSelect = document.getElementById('project-select');
+    el.btnRefreshProjects = document.getElementById('btn-refresh-projects');
+    el.projectInfoCard = document.getElementById('project-info-card');
+    el.projectTitleHeader = document.getElementById('project-title-header');
+    el.projectDescHeader = document.getElementById('project-desc-header');
+    el.projectItemsContainer = document.getElementById('project-items-container');
+    el.projectItemsTbody = document.getElementById('project-items-tbody');
+    el.projectLoadingIndicator = document.getElementById('project-loading-indicator');
     
     // Settings View
     el.btnDisconnectToken = document.getElementById('btn-disconnect-token');
@@ -271,7 +283,8 @@
         'stars': 'Project Stars & Analytics',
         'automation': 'Automations & Agents',
         'settings': 'Settings',
-        'search-results': 'Search Results'
+        'search-results': 'Search Results',
+        'projects': 'GitHub Projects'
       };
       el.currentViewTitle.textContent = titleMap[viewId] || 'Muninn';
 
@@ -282,6 +295,10 @@
           item.classList.add('active');
         }
       });
+
+      if (viewId === 'projects') {
+        loadProjectsView();
+      }
     }
   }
 
@@ -339,6 +356,25 @@
         } else {
           el.workflowsRunsTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--fg-secondary);">Select a repository above to display workflows.</td></tr>`;
         }
+      });
+    }
+
+    // Projects View Listeners
+    if (el.projectSelect) {
+      el.projectSelect.addEventListener('change', function () {
+        const projectId = this.value;
+        if (projectId) {
+          loadProjectDetails(projectId);
+        } else {
+          if (el.projectInfoCard) el.projectInfoCard.style.display = 'none';
+          if (el.projectItemsContainer) el.projectItemsContainer.style.display = 'none';
+        }
+      });
+    }
+
+    if (el.btnRefreshProjects) {
+      el.btnRefreshProjects.addEventListener('click', function () {
+        loadProjectsView(true);
       });
     }
 
@@ -2181,6 +2217,431 @@ Use this information to answer user questions about tasks, pull requests, issues
       "'": '&#039;'
     };
     return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+  }
+
+  // --- GITHUB PROJECTS VIEW ---
+  async function ghGraphQL(query, variables = {}) {
+    const copilotToken = localStorage.getItem('gh_copilot_pat') || state.token;
+    if (!copilotToken) {
+      throw new Error('No GitHub token configured.');
+    }
+    const response = await fetch('https://api.github.com/graphql', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${copilotToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query, variables })
+    });
+    
+    const result = await response.json();
+    if (result.errors && result.errors.length > 0) {
+      throw new Error(`GraphQL Error: ${result.errors.map(e => e.message).join(', ')}`);
+    }
+    return result.data;
+  }
+
+  async function loadProjectsView(forceRefresh = false) {
+    const copilotToken = localStorage.getItem('gh_copilot_pat') || state.token;
+    if (!copilotToken) {
+      if (el.projectLoadingIndicator) {
+        el.projectLoadingIndicator.style.display = 'block';
+        el.projectLoadingIndicator.innerHTML = `
+          <i class="fa-solid fa-key fa-2xl" style="color: var(--orange);"></i>
+          <p style="margin-top: 12px;">Please connect your GitHub account to load projects.</p>
+        `;
+      }
+      return;
+    }
+
+    if (state.projects && state.projects.length > 0 && !forceRefresh) {
+      populateProjectsSelect();
+      return;
+    }
+
+    if (el.projectLoadingIndicator) {
+      el.projectLoadingIndicator.style.display = 'block';
+      el.projectLoadingIndicator.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin fa-2xl" style="color: var(--blue);"></i>
+        <p style="margin-top: 12px;">Fetching projects from your GitHub account...</p>
+      `;
+    }
+    if (el.projectItemsContainer) el.projectItemsContainer.style.display = 'none';
+    if (el.projectInfoCard) el.projectInfoCard.style.display = 'none';
+
+    try {
+      // 1. Fetch user personal projects
+      const personalData = await ghGraphQL(`
+        query {
+          viewer {
+            projectsV2(first: 50) {
+              nodes {
+                id
+                title
+                number
+                shortDescription
+                closed
+              }
+            }
+          }
+        }
+      `);
+      
+      let allProjects = [];
+      if (personalData && personalData.viewer && personalData.viewer.projectsV2) {
+        allProjects = personalData.viewer.projectsV2.nodes.filter(p => !p.closed) || [];
+      }
+
+      // 2. Fetch organization-level projects if applicable
+      const uniqueOrgs = new Set();
+      if (state.repos) {
+        state.repos.forEach(repo => {
+          if (repo.owner && repo.owner.type === 'Organization') {
+            uniqueOrgs.add(repo.owner.login);
+          }
+        });
+      }
+
+      for (const org of uniqueOrgs) {
+        try {
+          const orgData = await ghGraphQL(`
+            query($orgLogin: String!) {
+              organization(login: $orgLogin) {
+                projectsV2(first: 50) {
+                  nodes {
+                    id
+                    title
+                    number
+                    shortDescription
+                    closed
+                  }
+                }
+              }
+            }
+          `, { orgLogin: org });
+          if (orgData && orgData.organization && orgData.organization.projectsV2) {
+            const orgProjects = orgData.organization.projectsV2.nodes.filter(p => !p.closed) || [];
+            allProjects = allProjects.concat(orgProjects);
+          }
+        } catch (orgErr) {
+          console.warn(`Could not fetch projects for organization ${org}:`, orgErr);
+        }
+      }
+
+      // Deduplicate by ID
+      const seenIds = new Set();
+      state.projects = allProjects.filter(p => {
+        if (seenIds.has(p.id)) return false;
+        seenIds.add(p.id);
+        return true;
+      });
+
+      if (el.projectLoadingIndicator) el.projectLoadingIndicator.style.display = 'none';
+      populateProjectsSelect();
+
+    } catch (err) {
+      console.error('Error loading projects:', err);
+      if (el.projectLoadingIndicator) {
+        el.projectLoadingIndicator.innerHTML = `
+          <i class="fa-solid fa-circle-exclamation fa-2xl" style="color: var(--red);"></i>
+          <p style="margin-top: 12px; color: var(--red);">Failed to load projects: ${escapeHtml(err.message)}</p>
+          <p style="font-size: 11px; color: var(--fg-secondary);">Make sure your GitHub Token has the <code>project</code> scope enabled.</p>
+        `;
+      }
+    }
+  }
+
+  function populateProjectsSelect() {
+    if (!el.projectSelect) return;
+
+    if (!state.projects || state.projects.length === 0) {
+      el.projectSelect.innerHTML = '<option value="">No projects found</option>';
+      if (el.projectLoadingIndicator) {
+        el.projectLoadingIndicator.style.display = 'block';
+        el.projectLoadingIndicator.innerHTML = `
+          <i class="fa-solid fa-folder-open fa-2xl" style="color: var(--fg-secondary);"></i>
+          <p style="margin-top: 12px;">No open Projects v2 found in your account.</p>
+        `;
+      }
+      return;
+    }
+
+    const prevSelection = el.projectSelect.value;
+    const options = state.projects.map(p => `<option value="${p.id}">${escapeHtml(p.title)} (#${p.number})</option>`).join('');
+    el.projectSelect.innerHTML = `<option value="">Select a project...</option>${options}`;
+
+    if (prevSelection && state.projects.some(p => p.id === prevSelection)) {
+      el.projectSelect.value = prevSelection;
+      loadProjectDetails(prevSelection);
+    }
+  }
+
+  async function loadProjectDetails(projectId) {
+    if (el.projectLoadingIndicator) {
+      el.projectLoadingIndicator.style.display = 'block';
+      el.projectLoadingIndicator.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin fa-2xl" style="color: var(--blue);"></i>
+        <p style="margin-top: 12px;">Loading project tasks...</p>
+      `;
+    }
+    if (el.projectItemsContainer) el.projectItemsContainer.style.display = 'none';
+    if (el.projectInfoCard) el.projectInfoCard.style.display = 'none';
+
+    try {
+      const data = await ghGraphQL(`
+        query($projectId: ID!) {
+          node(id: $projectId) {
+            ... on ProjectV2 {
+              title
+              shortDescription
+              fields(first: 50) {
+                nodes {
+                  ... on ProjectV2SingleSelectField {
+                    id
+                    name
+                    options {
+                      id
+                      name
+                    }
+                  }
+                  ... on ProjectV2FieldCommon {
+                    id
+                    name
+                    dataType
+                  }
+                }
+              }
+              items(first: 100) {
+                nodes {
+                  id
+                  type
+                  content {
+                    ... on DraftIssue {
+                      id
+                      title
+                      body
+                    }
+                    ... on Issue {
+                      id
+                      number
+                      title
+                      url
+                      state
+                      repository {
+                        name
+                        nameWithOwner
+                      }
+                    }
+                    ... on PullRequest {
+                      id
+                      number
+                      title
+                      url
+                      state
+                      repository {
+                        name
+                        nameWithOwner
+                      }
+                    }
+                  }
+                  fieldValues(first: 20) {
+                    nodes {
+                      ... on ProjectV2ItemFieldTextValue {
+                        text
+                        field {
+                          ... on ProjectV2FieldCommon {
+                            id
+                          }
+                        }
+                      }
+                      ... on ProjectV2ItemFieldDateValue {
+                        date
+                        field {
+                          ... on ProjectV2FieldCommon {
+                            id
+                          }
+                        }
+                      }
+                      ... on ProjectV2ItemFieldSingleSelectValue {
+                        optionId
+                        name
+                        field {
+                          ... on ProjectV2FieldCommon {
+                            id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `, { projectId });
+
+      if (el.projectLoadingIndicator) el.projectLoadingIndicator.style.display = 'none';
+
+      if (!data || !data.node) {
+        throw new Error('Project not found or access denied.');
+      }
+
+      state.currentProject = data.node;
+      renderProjectItems(projectId);
+
+    } catch (err) {
+      console.error('Error loading project details:', err);
+      if (el.projectLoadingIndicator) {
+        el.projectLoadingIndicator.innerHTML = `
+          <i class="fa-solid fa-circle-exclamation fa-2xl" style="color: var(--red);"></i>
+          <p style="margin-top: 12px; color: var(--red);">Failed to load project details: ${escapeHtml(err.message)}</p>
+        `;
+      }
+    }
+  }
+
+  function renderProjectItems(projectId) {
+    const project = state.currentProject;
+    if (!project) return;
+
+    if (el.projectInfoCard) {
+      el.projectInfoCard.style.display = 'block';
+      el.projectTitleHeader.textContent = project.title;
+      el.projectDescHeader.textContent = project.shortDescription || 'No description provided.';
+    }
+
+    if (el.projectItemsContainer) {
+      el.projectItemsContainer.style.display = 'block';
+    }
+
+    const statusField = project.fields.nodes.find(f => f.name === 'Status');
+    const statusFieldId = statusField ? statusField.id : null;
+    const statusOptions = statusField ? statusField.options || [] : [];
+
+    if (!el.projectItemsTbody) return;
+
+    if (!project.items.nodes || project.items.nodes.length === 0) {
+      el.projectItemsTbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--fg-secondary);">No items found in this project.</td>
+        </tr>
+      `;
+      return;
+    }
+
+    el.projectItemsTbody.innerHTML = project.items.nodes.map(item => {
+      const content = item.content || {};
+      const type = item.type;
+      
+      let typeIcon = '';
+      if (type === 'ISSUE') {
+        typeIcon = '<i class="fa-solid fa-circle-dot" style="color: var(--green);" title="Issue"></i>';
+      } else if (type === 'PULL_REQUEST') {
+        typeIcon = '<i class="fa-solid fa-code-pull-request" style="color: var(--blue);" title="Pull Request"></i>';
+      } else if (type === 'DRAFT_ISSUE') {
+        typeIcon = '<i class="fa-solid fa-pen-to-square" style="color: var(--orange);" title="Draft Issue"></i>';
+      }
+
+      const title = content.title || 'Untitled';
+      const url = content.url || '#';
+      const repo = content.repository ? content.repository.nameWithOwner : (type === 'DRAFT_ISSUE' ? 'Draft' : 'N/A');
+
+      let stateBadge = '';
+      if (content.state) {
+        const stateStr = content.state.toLowerCase();
+        let badgeClass = 'badge-info';
+        if (stateStr === 'open') badgeClass = 'badge-success';
+        if (stateStr === 'closed') badgeClass = 'badge-danger';
+        if (stateStr === 'merged') badgeClass = 'badge-primary';
+        stateBadge = `<span class="badge ${badgeClass}">${content.state}</span>`;
+      } else {
+        stateBadge = `<span class="badge badge-warning">Draft</span>`;
+      }
+
+      let currentStatusValue = '';
+      if (statusFieldId && item.fieldValues && item.fieldValues.nodes) {
+        const statusVal = item.fieldValues.nodes.find(v => v.field && v.field.id === statusFieldId);
+        if (statusVal) {
+          currentStatusValue = statusVal.optionId || '';
+        }
+      }
+
+      let statusSelector = '';
+      if (statusFieldId && statusOptions.length > 0) {
+        const optionsHtml = statusOptions.map(opt => 
+          `<option value="${opt.id}" ${opt.id === currentStatusValue ? 'selected' : ''}>${escapeHtml(opt.name)}</option>`
+        ).join('');
+        statusSelector = `
+          <select class="form-control project-status-select" 
+                  data-item-id="${item.id}" 
+                  data-field-id="${statusFieldId}"
+                  style="margin: 0; padding: 4px 8px; font-size: 12px; height: auto; border: 2px solid var(--border-color); border-radius: 4px; outline: none; background-color: var(--bg-hard); color: var(--fg-primary);">
+            <option value="">No Status</option>
+            ${optionsHtml}
+          </select>
+        `;
+      } else {
+        statusSelector = `<span style="color: var(--fg-secondary); font-style: italic;">No status field</span>`;
+      }
+
+      return `
+        <tr>
+          <td style="text-align: center; width: 50px; font-size: 16px;">${typeIcon}</td>
+          <td>
+            <a href="${url}" target="_blank" class="repo-link" style="font-weight: bold; color: var(--fg-primary);">
+              ${escapeHtml(title)}
+            </a>
+          </td>
+          <td class="mono-text" style="font-size: 12px; color: var(--fg-secondary);">${escapeHtml(repo)}</td>
+          <td>${stateBadge}</td>
+          <td>${statusSelector}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const selects = el.projectItemsTbody.querySelectorAll('.project-status-select');
+    selects.forEach(select => {
+      select.addEventListener('change', async function () {
+        const itemId = this.getAttribute('data-item-id');
+        const fieldId = this.getAttribute('data-field-id');
+        const optionId = this.value;
+        const itemName = this.closest('tr').querySelector('.repo-link').textContent.trim();
+        const selectedText = this.options[this.selectedIndex].text;
+
+        try {
+          this.disabled = true;
+          await updateProjectItemStatus(projectId, itemId, fieldId, optionId, itemName, selectedText);
+        } catch (err) {
+          showNotification('Project Update Error', `Failed to update status: ${err.message}`, 'danger');
+          loadProjectDetails(projectId);
+        } finally {
+          this.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function updateProjectItemStatus(projectId, itemId, fieldId, optionId, itemName, optionName) {
+    showNotification('Updating Task Status', `Moving '${itemName}' to '${optionName}'...`, 'info');
+    
+    await ghGraphQL(`
+      mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+        updateProjectV2ItemFieldValue(input: {
+          projectId: $projectId
+          itemId: $itemId
+          fieldId: $fieldId
+          value: {
+            singleSelectOptionId: $optionId
+          }
+        }) {
+          projectV2Item {
+            id
+          }
+        }
+      }
+    `, { projectId, itemId, fieldId, optionId });
+
+    showNotification('Task Status Updated', `Successfully moved '${itemName}' to '${optionName}'!`, 'success');
   }
 
   // Kickstart App

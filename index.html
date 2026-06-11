@@ -29,6 +29,9 @@ title: Muninn - GitHub Dashboard
     <li class="nav-item" data-view="stars">
       <a href="#stars"><i class="fa-solid fa-star"></i> Project Stars</a>
     </li>
+    <li class="nav-item" data-view="projects">
+      <a href="#projects"><i class="fa-solid fa-table-list"></i> Projects</a>
+    </li>
     <li class="nav-item" data-view="automation">
       <a href="#automation"><i class="fa-solid fa-robot"></i> Automations</a>
     </li>
@@ -396,6 +399,50 @@ title: Muninn - GitHub Dashboard
             </tr>
           </tbody>
         </table>
+      </div>
+    </section>
+
+    <!-- View: Projects -->
+    <section id="view-projects" class="view-section">
+      <div class="mb-6 flex-align" style="justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h3>GitHub Projects v2</h3>
+          <p class="card-desc">Manage table sheets, task boards, and update card statuses via GraphQL.</p>
+        </div>
+        <div class="flex-align" style="gap: 12px;">
+          <label class="form-label" for="project-select" style="margin-bottom: 0; font-size: 13px;">Active Project:</label>
+          <select id="project-select" class="form-control" style="margin: 0; padding: 6px 12px; font-size: 13px; max-width: 250px;">
+            <option value="">Loading projects...</option>
+          </select>
+          <button class="btn btn-sm btn-primary" id="btn-refresh-projects" style="margin: 0; padding: 6px 12px;"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+      </div>
+
+      <div class="card card-accent-blue mb-6" id="project-info-card" style="display: none;">
+        <h4 id="project-title-header" style="margin: 0 0 6px 0; color: var(--blue);"></h4>
+        <p class="card-desc" id="project-desc-header" style="margin: 0;"></p>
+      </div>
+
+      <div class="table-container" id="project-items-container" style="display: none;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px;">Type</th>
+              <th>Task / Item Title</th>
+              <th>Repository</th>
+              <th>State</th>
+              <th style="width: 200px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="project-items-tbody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+      
+      <div id="project-loading-indicator" style="text-align: center; padding: 40px; color: var(--fg-secondary);">
+        <i class="fa-solid fa-spinner fa-spin fa-2xl"></i>
+        <p style="margin-top: 12px;">Please connect your GitHub account to load projects.</p>
       </div>
     </section>
 
