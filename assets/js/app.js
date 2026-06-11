@@ -29,7 +29,11 @@
     notifiedPrIds: new Set(),
     notifiedRunIds: new Set(),
     notifiedSecurityAlertIds: new Set(),
-    trackedOpenPrs: []
+    trackedOpenPrs: [],
+    metricsLoaded: false,
+    closedItems: [],
+    closedTotalCount: 0,
+    mergedPrs: []
   };
 
   // DOM Elements
@@ -96,6 +100,23 @@
     el.projectItemsContainer = document.getElementById('project-items-container');
     el.projectItemsTbody = document.getElementById('project-items-tbody');
     el.projectLoadingIndicator = document.getElementById('project-loading-indicator');
+    
+    // Metrics View
+    el.metricLeadTime = document.getElementById('metric-lead-time');
+    el.metricCycleTime = document.getElementById('metric-cycle-time');
+    el.metricTestCoverage = document.getElementById('metric-test-coverage');
+    el.metricItemAge = document.getElementById('metric-item-age');
+    el.metricPredictability = document.getElementById('metric-predictability');
+    el.metricBlockedTime = document.getElementById('metric-blocked-time');
+    el.metricDefectEscape = document.getElementById('metric-defect-escape');
+    el.metricDefectRoot = document.getElementById('metric-defect-root');
+    el.metricAvgVelocity = document.getElementById('metric-avg-velocity');
+    el.metricChangeFailure = document.getElementById('metric-change-failure');
+    
+    el.inputTestCoverage = document.getElementById('input-test-coverage');
+    el.inputDefectEscape = document.getElementById('input-defect-escape');
+    el.inputAvgVelocity = document.getElementById('input-avg-velocity');
+    el.btnRefreshMetrics = document.getElementById('btn-refresh-metrics');
     
     // Settings View
     el.btnDisconnectToken = document.getElementById('btn-disconnect-token');
@@ -284,7 +305,8 @@
         'automation': 'Automations & Agents',
         'settings': 'Settings',
         'search-results': 'Search Results',
-        'projects': 'GitHub Projects'
+        'projects': 'GitHub Projects',
+        'metrics': 'Metrics & KPI Dashboard'
       };
       el.currentViewTitle.textContent = titleMap[viewId] || 'Muninn';
 
@@ -298,6 +320,8 @@
 
       if (viewId === 'projects') {
         loadProjectsView();
+      } else if (viewId === 'metrics') {
+        calculateMetrics();
       }
     }
   }
@@ -562,6 +586,49 @@
         initCopilotConnection();
       });
     }
+
+    // Metrics View Listeners
+    if (el.btnRefreshMetrics) {
+      el.btnRefreshMetrics.addEventListener('click', function () {
+        calculateMetrics(true);
+      });
+    }
+
+    if (el.inputTestCoverage) {
+      // Load initial from localStorage or default
+      const val = localStorage.getItem('metric_test_coverage') || '80';
+      el.inputTestCoverage.value = val;
+      el.metricTestCoverage.textContent = val + '%';
+
+      el.inputTestCoverage.addEventListener('input', function () {
+        el.metricTestCoverage.textContent = this.value + '%';
+        localStorage.setItem('metric_test_coverage', this.value);
+      });
+    }
+
+    if (el.inputDefectEscape) {
+      // Load initial
+      const val = localStorage.getItem('metric_defect_escape') || '15';
+      el.inputDefectEscape.value = val;
+      el.metricDefectEscape.textContent = val + '%';
+
+      el.inputDefectEscape.addEventListener('input', function () {
+        el.metricDefectEscape.textContent = this.value + '%';
+        localStorage.setItem('metric_defect_escape', this.value);
+      });
+    }
+
+    if (el.inputAvgVelocity) {
+      // Load initial
+      const val = localStorage.getItem('metric_avg_velocity') || '45';
+      el.inputAvgVelocity.value = val;
+      el.metricAvgVelocity.textContent = val + ' SP';
+
+      el.inputAvgVelocity.addEventListener('input', function () {
+        el.metricAvgVelocity.textContent = this.value + ' SP';
+        localStorage.setItem('metric_avg_velocity', this.value);
+      });
+    }
   }
 
   // --- AUTO-REFRESH MANAGEMENT ---
@@ -680,6 +747,10 @@
     state.notifiedRunIds = new Set();
     state.notifiedSecurityAlertIds = new Set();
     state.trackedOpenPrs = [];
+    state.metricsLoaded = false;
+    state.closedItems = [];
+    state.closedTotalCount = 0;
+    state.mergedPrs = [];
     
     localStorage.removeItem('gh_pat');
     
@@ -710,6 +781,7 @@
   // --- DASHBOARD DATA LOADING ---
   async function refreshDashboard() {
     if (!state.token) return;
+    state.metricsLoaded = false;
 
     // Show spinning refresh icon
     const refreshIcon = el.btnRefresh.querySelector('i');
@@ -758,6 +830,8 @@
       if (activeHash === 'workflows') {
         const activeRepo = el.workflowsRepoSelect.value;
         if (activeRepo) loadRepoWorkflows(activeRepo);
+      } else if (activeHash === 'metrics') {
+        calculateMetrics();
       }
 
     } catch (err) {
@@ -2642,6 +2716,189 @@ Use this information to answer user questions about tasks, pull requests, issues
     `, { projectId, itemId, fieldId, optionId });
 
     showNotification('Task Status Updated', `Successfully moved '${itemName}' to '${optionName}'!`, 'success');
+  }
+
+  // --- METRICS CALCULATION AND RENDERING ---
+  async function calculateMetrics(forceRefresh = false) {
+    if (!state.token) return;
+
+    const needsFetch = forceRefresh || !state.metricsLoaded;
+    if (needsFetch) {
+      if (el.btnRefreshMetrics) {
+        const icon = el.btnRefreshMetrics.querySelector('i');
+        if (icon) icon.classList.add('fa-spin');
+      }
+      if (el.metricLeadTime) el.metricLeadTime.innerHTML = '<i class="fa-solid fa-spinner fa-spin fa-xs"></i>';
+      if (el.metricCycleTime) el.metricCycleTime.innerHTML = '<i class="fa-solid fa-spinner fa-spin fa-xs"></i>';
+      if (el.metricPredictability) el.metricPredictability.innerHTML = '<i class="fa-solid fa-spinner fa-spin fa-xs"></i>';
+    }
+
+    try {
+      if (needsFetch) {
+        // Fetch recently closed issues/PRs (Lead Time)
+        const closedQuery = `/search/issues?q=is:closed+user:${state.user.login}&per_page=50`;
+        const closedResult = await ghFetch(closedQuery);
+        state.closedItems = closedResult.items || [];
+        state.closedTotalCount = closedResult.total_count || 0;
+
+        // Fetch recently merged PRs (Cycle Time)
+        const mergedQuery = `/search/issues?q=is:pr+is:merged+user:${state.user.login}&per_page=50`;
+        const mergedResult = await ghFetch(mergedQuery);
+        state.mergedPrs = mergedResult.items || [];
+
+        state.metricsLoaded = true;
+      }
+
+      // 1. Lead Time Calculation
+      let leadTimeStr = '0.0d';
+      if (state.closedItems && state.closedItems.length > 0) {
+        let totalMs = 0;
+        let count = 0;
+        state.closedItems.forEach(item => {
+          if (item.closed_at && item.created_at) {
+            const closed = Date.parse(item.closed_at);
+            const created = Date.parse(item.created_at);
+            if (closed >= created) {
+              totalMs += (closed - created);
+              count++;
+            }
+          }
+        });
+        if (count > 0) {
+          const avgDays = totalMs / (1000 * 60 * 60 * 24 * count);
+          leadTimeStr = avgDays.toFixed(1) + 'd';
+        }
+      }
+      if (el.metricLeadTime) el.metricLeadTime.textContent = leadTimeStr;
+
+      // 2. Cycle Time Calculation
+      let cycleTimeStr = '0.0d';
+      if (state.mergedPrs && state.mergedPrs.length > 0) {
+        let totalMs = 0;
+        let count = 0;
+        state.mergedPrs.forEach(item => {
+          if (item.closed_at && item.created_at) {
+            const closed = Date.parse(item.closed_at);
+            const created = Date.parse(item.created_at);
+            if (closed >= created) {
+              totalMs += (closed - created);
+              count++;
+            }
+          }
+        });
+        if (count > 0) {
+          const avgDays = totalMs / (1000 * 60 * 60 * 24 * count);
+          cycleTimeStr = avgDays.toFixed(1) + 'd';
+        }
+      }
+      if (el.metricCycleTime) el.metricCycleTime.textContent = cycleTimeStr;
+
+      // 3. Test Automation Coverage (from slider/localStorage)
+      const testCoverage = localStorage.getItem('metric_test_coverage') || '80';
+      if (el.metricTestCoverage) el.metricTestCoverage.textContent = testCoverage + '%';
+
+      // 4. Work Item Age Calculation
+      let ageStr = '0.0d';
+      const openItems = [...(state.prs || []), ...(state.issues || [])];
+      if (openItems.length > 0) {
+        let totalMs = 0;
+        const now = Date.now();
+        openItems.forEach(item => {
+          const created = Date.parse(item.created_at);
+          if (now >= created) {
+            totalMs += (now - created);
+          }
+        });
+        const avgDays = totalMs / (1000 * 60 * 60 * 24 * openItems.length);
+        ageStr = avgDays.toFixed(1) + 'd';
+      }
+      if (el.metricItemAge) el.metricItemAge.textContent = ageStr;
+
+      // 5. Delivery Predictability Calculation
+      let predictabilityStr = '100%';
+      const openCount = (state.prs ? state.prs.length : 0) + (state.issues ? state.issues.length : 0);
+      const closedCount = state.closedTotalCount || 0;
+      const totalCount = openCount + closedCount;
+      if (totalCount > 0) {
+        const ratio = (closedCount / totalCount) * 100;
+        predictabilityStr = ratio.toFixed(0) + '%';
+      }
+      if (el.metricPredictability) el.metricPredictability.textContent = predictabilityStr;
+
+      // 6. Blocked Time Calculation
+      let blockedStr = '0%';
+      if (openItems.length > 0) {
+        let blockedCount = 0;
+        openItems.forEach(item => {
+          const hasBlockedLabel = item.labels && item.labels.some(label => {
+            const name = label.name.toLowerCase();
+            return name.includes('blocked') || name.includes('hold') || name.includes('wait') || name.includes('pending');
+          });
+          if (hasBlockedLabel) {
+            blockedCount++;
+          }
+        });
+        const ratio = (blockedCount / openItems.length) * 100;
+        blockedStr = ratio.toFixed(0) + '%';
+      }
+      if (el.metricBlockedTime) el.metricBlockedTime.textContent = blockedStr;
+
+      // 7. Defect Escape Rate
+      const defectEscape = localStorage.getItem('metric_defect_escape') || '15';
+      if (el.metricDefectEscape) el.metricDefectEscape.textContent = defectEscape + '%';
+
+      // 8. Defect Root Cause Calculation
+      let defectRootCount = 0;
+      if (state.issues && state.issues.length > 0) {
+        state.issues.forEach(issue => {
+          const isBug = issue.labels && issue.labels.some(label => {
+            const name = label.name.toLowerCase();
+            return name.includes('bug') || name.includes('defect') || name.includes('error');
+          });
+          if (isBug) {
+            defectRootCount++;
+          }
+        });
+      }
+      if (el.metricDefectRoot) el.metricDefectRoot.textContent = defectRootCount;
+
+      // 9. Average Velocity
+      const avgVelocity = localStorage.getItem('metric_avg_velocity') || '45';
+      if (el.metricAvgVelocity) el.metricAvgVelocity.textContent = avgVelocity + ' SP';
+
+      // 10. Change Failure Rate Calculation
+      let failureRateStr = '0.0%';
+      let totalRuns = 0;
+      let failedRuns = 0;
+      Object.keys(state.workflowRuns).forEach(repo => {
+        const runs = state.workflowRuns[repo] || [];
+        runs.forEach(run => {
+          if (run.status === 'completed') {
+            totalRuns++;
+            if (run.conclusion === 'failure') {
+              failedRuns++;
+            }
+          }
+        });
+      });
+      if (totalRuns > 0) {
+        const ratio = (failedRuns / totalRuns) * 100;
+        failureRateStr = ratio.toFixed(1) + '%';
+      }
+      if (el.metricChangeFailure) el.metricChangeFailure.textContent = failureRateStr;
+
+    } catch (err) {
+      console.error('Error calculating metrics:', err);
+    } finally {
+      if (needsFetch && el.btnRefreshMetrics) {
+        const icon = el.btnRefreshMetrics.querySelector('i');
+        if (icon) {
+          setTimeout(() => {
+            icon.classList.remove('fa-spin');
+          }, 500);
+        }
+      }
+    }
   }
 
   // Kickstart App

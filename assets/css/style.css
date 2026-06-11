@@ -1011,4 +1011,48 @@ tr:hover td {
   to { opacity: 1; }
 }
 
+/* Form Range Slider Styling */
+.form-range {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-color);
+  outline: none;
+}
+.form-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--orange);
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  box-shadow: 1px 1px 0px var(--shadow-color);
+  transition: transform 0.1s ease;
+}
+.form-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--yellow);
+}
+.form-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--orange);
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  box-shadow: 1px 1px 0px var(--shadow-color);
+  transition: transform 0.1s ease;
+}
+.form-range::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  background: var(--yellow);
+}
 
+/* Additional Card Accents */
+.card-accent-purple { border-top: 5px solid var(--purple); }
+.card-accent-aqua { border-top: 5px solid var(--aqua); }
+.card-accent-fg { border-top: 5px solid var(--fg-secondary); }

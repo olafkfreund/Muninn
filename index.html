@@ -32,6 +32,9 @@ title: Muninn - GitHub Dashboard
     <li class="nav-item" data-view="projects">
       <a href="#projects"><i class="fa-solid fa-table-list"></i> Projects</a>
     </li>
+    <li class="nav-item" data-view="metrics">
+      <a href="#metrics"><i class="fa-solid fa-chart-line"></i> Metrics</a>
+    </li>
     <li class="nav-item" data-view="automation">
       <a href="#automation"><i class="fa-solid fa-robot"></i> Automations</a>
     </li>
@@ -443,6 +446,132 @@ title: Muninn - GitHub Dashboard
       <div id="project-loading-indicator" style="text-align: center; padding: 40px; color: var(--fg-secondary);">
         <i class="fa-solid fa-spinner fa-spin fa-2xl"></i>
         <p style="margin-top: 12px;">Please connect your GitHub account to load projects.</p>
+      </div>
+    </section>
+
+    <!-- View: Metrics -->
+    <section id="view-metrics" class="view-section">
+      <div class="mb-6 flex-align" style="justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <h3>Metrics & KPI Dashboard</h3>
+          <p class="card-desc">Track engineering excellence and team delivery performance indicators.</p>
+        </div>
+        <div>
+          <button class="btn btn-sm btn-primary" id="btn-refresh-metrics" style="margin: 0; padding: 6px 12px;"><i class="fa-solid fa-rotate"></i> Refresh</button>
+        </div>
+      </div>
+
+      <div class="grid-container">
+        <!-- Card 1: Lead Time -->
+        <div class="card card-accent-red">
+          <div class="card-title">
+            Lead Time
+            <i class="fa-solid fa-clock-rotate-left" style="color: var(--red); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-lead-time">--</div>
+          <p class="card-desc">Total time from customer request/creation until final delivery (days).</p>
+        </div>
+
+        <!-- Card 2: Cycle Time -->
+        <div class="card card-accent-green">
+          <div class="card-title">
+            Cycle Time
+            <i class="fa-solid fa-user-gear" style="color: var(--green); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-cycle-time">--</div>
+          <p class="card-desc">Total time from when work starts on a release until the point where it is released (days).</p>
+        </div>
+
+        <!-- Card 3: Test Automation Coverage -->
+        <div class="card card-accent-yellow">
+          <div class="card-title">
+            Test Automation Coverage
+            <i class="fa-solid fa-code" style="color: var(--yellow); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-test-coverage">80%</div>
+          <p class="card-desc">Percentage of regression/integration testing automated.</p>
+          <div style="margin-top: 16px;">
+            <input type="range" id="input-test-coverage" min="0" max="100" value="80" class="form-range">
+          </div>
+        </div>
+
+        <!-- Card 4: Work Item Age -->
+        <div class="card card-accent-blue">
+          <div class="card-title">
+            Work Item Age
+            <i class="fa-solid fa-route" style="color: var(--blue); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-item-age">--</div>
+          <p class="card-desc">Time needed to satisfy the customer with new and competitive products (days).</p>
+        </div>
+
+        <!-- Card 5: Delivery Predictability -->
+        <div class="card card-accent-orange">
+          <div class="card-title">
+            Delivery Predictability
+            <i class="fa-solid fa-chart-line" style="color: var(--orange); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-predictability">--</div>
+          <p class="card-desc">Measures how much committed work is actually completed.</p>
+        </div>
+
+        <!-- Card 6: Blocked Time -->
+        <div class="card card-accent-red">
+          <div class="card-title">
+            Blocked Time
+            <i class="fa-solid fa-ban" style="color: var(--red); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-blocked-time">--</div>
+          <p class="card-desc">Percentage of time work items are blocked.</p>
+        </div>
+
+        <!-- Card 7: Defect Escape Rate -->
+        <div class="card card-accent-purple">
+          <div class="card-title">
+            Defect Escape Rate
+            <span style="color: var(--purple); display: inline-flex; align-items: center;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M15 3v18" /></svg>
+            </span>
+          </div>
+          <div class="card-value" id="metric-defect-escape">15%</div>
+          <p class="card-desc">Defects found after release vs before release.</p>
+          <div style="margin-top: 16px;">
+            <input type="range" id="input-defect-escape" min="0" max="100" value="15" class="form-range">
+          </div>
+        </div>
+
+        <!-- Card 8: Defect Root Cause -->
+        <div class="card card-accent-aqua">
+          <div class="card-title">
+            Defect Root Cause
+            <i class="fa-solid fa-handshake" style="color: var(--aqua); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-defect-root">--</div>
+          <p class="card-desc">Items that require rework due to upstream defects (bugs count).</p>
+        </div>
+
+        <!-- Card 9: Average Velocity -->
+        <div class="card card-accent-fg">
+          <div class="card-title">
+            Average Velocity
+            <i class="fa-solid fa-gauge-high" style="color: var(--fg-secondary); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-avg-velocity">45 SP</div>
+          <p class="card-desc">Average story points completed over the last 3-5 sprints.</p>
+          <div style="margin-top: 16px;">
+            <input type="range" id="input-avg-velocity" min="0" max="150" value="45" class="form-range">
+          </div>
+        </div>
+
+        <!-- Card 10: Change Failure Rate -->
+        <div class="card card-accent-orange">
+          <div class="card-title">
+            Change Failure Rate
+            <i class="fa-solid fa-right-left" style="color: var(--orange); font-size: 1.2em;"></i>
+          </div>
+          <div class="card-value" id="metric-change-failure">--</div>
+          <p class="card-desc">Measure of consistency and quality (workflow runs failure rate).</p>
+        </div>
       </div>
     </section>
 
